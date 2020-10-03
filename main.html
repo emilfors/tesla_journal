@@ -1,0 +1,230 @@
+<html>
+    <head>
+        <meta http-equiv=Content-Type content="text/html" charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <title>Tesla Körjournal</title>
+
+        <style>
+body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.header {
+    padding: 20px 0px;
+    background: #ffffff;
+}
+
+.content {
+    padding: 0px;
+}
+
+.sticky {
+    position: fixed;
+    top: 0;
+    width: 100%
+}
+
+.sticky + .content {
+    padding-top: 250px;
+}
+
+.day {
+    background-color: #fafafa;
+    border: solid black 2px;
+    -moz-border-radius: 8px;
+    -webkit-border-radius: 8px;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.business {
+    color: #0000ff;
+    font-size: 10.0pt;
+}
+
+.private {
+    color: #ff00ff;
+    font-size: 10.0pt;
+}
+        </style>
+    </head>
+
+    <body>
+        <center>
+            <div class="header sticky" id="pageHeader">
+                <table cellpadding=0 cellspacing=0 width=900 height=200 border=0 dir=ltr>
+                    <tr height=100 width=100%>
+                        <form id="selectform" action="/" method="post">
+                            <td align=left valign=top>
+                                <span style='font-size: 18.0pt;font-weight:bold;'>
+                                    Tesla Körjournal
+                                </span>
+                            </td>
+
+                            <td align=center valign=top>
+                                {{$y := .Year}}
+                                {{$m := .Month}}
+                                <select id="month" name="month" onchange="selectform.submit()">
+                                    {{range .DropdownMonths}}
+                                    <option {{if eq .Number $m}}selected{{end}} value="{{.Number}}">{{.Name}}</option>
+                                    {{end}}
+                                </select>
+
+                                <select id="year" name="year" onchange="selectform.submit()">
+                                    {{range .DropdownYears}}
+                                    <option {{if eq . $y}}selected{{end}} value="{{.}}">{{.}}</option>
+                                    {{end}}
+                                </select>
+                            </td>
+
+                            <td align=right valign=top>
+                                {{$c := .CarId}}
+                                <select id="car" name="car" onchange="selectform.submit()">
+                                    {{range .DropdownCars}}
+                                    <option {{if eq .Id $c}}selected{{end}} value="{{.Id}}">Tesla Model {{.Model}} ({{.Name}})</option>
+                                    {{end}}
+                                </select>
+                            </td>
+                        </form>
+                    </tr>
+
+                    <tr valign=bottom>
+                        <td align=left>
+                            <button type="button" onClick="classify('business')">Tjänsteresa</button>
+                            <button type="button" onClick="classify('private')">Privat resa</button>
+                        </td>
+
+                        <td align=right>
+                            Total körsträcka: {{.TotalDistanceString}} km<br>
+                            Varav tjänsteresor: {{.TotalBusinessDistanceString}} km<br>
+                            Varav privatresor: {{.TotalPrivateDistanceString}} km
+                        </td>
+
+                        <td align=right>
+                            Total tid: {{.TotalDurationString}}<br>
+                            Varav tjänsteresor: {{.TotalBusinessDurationString}}<br>
+                            Varav privatresor: {{.TotalPrivateDurationString}}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="content">
+                <form id="dayform" action="/" method="post">
+                    <input type="hidden" id="action" name="action" value="">
+                    <input type="hidden" id="classification" name="classification" value="">
+                    <input type="hidden" name="year" value="{{$y}}">
+                    <input type="hidden" name="month" value="{{$m}}">
+                    <input type="hidden" name="car" value="{{$c}}">
+
+                    <table cellpadding=0 cellspacing=0 width=900 border=0 dir=ltr>
+                        {{range .Days}}
+                        <tr>
+                            <td colspan=3>
+                                <table width=100% class="day">
+                                    {{$ts := .DateAsTs}}
+                                    <tr height=10>
+                                        <td align=left width=50>
+                                            <input type="checkbox" id="master_{{$ts}}" onClick="selectAll(this, '{{$ts}}')"/>
+                                        </td>
+
+                                        <td align=left colspan=5>
+                                            <b>{{.DateString}}</b>
+                                        </td>
+                                    </tr>
+
+                                    <tr height=10>
+                                        <td colspan=6>
+                                            &nbsp;
+                                        </td>
+                                    </tr>
+
+                                    {{range .Drives}}
+                                    <tr>
+                                        <td align=left width=50>
+                                            <input type="checkbox" id="drive_{{$ts}}" name="drive" value="{{.Id}}" onClick="deselectMaster(this, '{{$ts}}')"/>
+                                        </td>
+
+                                        <td align=left width=250>
+                                            <span lang=sv style='font-size: 10.0pt; font-family:Calibri;language:sv'>
+                                                {{.StartAddress}}<br>
+                                                {{.EndAddress}}
+                                            </span>
+                                        </td>
+
+                                        <td align=right width=50>
+                                            <span lang=sv style='font-size: 10.0pt;font-family:Calibri;language:sv'>
+                                                {{.StartTime}}<br>
+                                                {{.EndTime}}
+                                            </span>
+                                        </td>
+
+                                        <td width=150>
+                                            &nbsp;
+                                        </td>
+
+                                        <td align=left width=250>
+                                            <span lang=sv style='font-size: 10.0pt;font-family:Calibri;language:sv'>
+                                                Körsträcka: {{.DistanceString}} km<br>
+                                                Tid: {{.DurationString}}
+                                            </span>
+                                        </td>
+
+                                        <td align=right width=150>
+                                            <span class={{.ClassificationClass}}>
+                                                {{.ClassificationString}}
+                                            </span>
+                                        </td>
+                                    </tr>
+
+                                    <tr height=10>
+                                        <td colspan=6>
+                                            &nbsp;
+                                        </td>
+                                    </tr>
+                                    {{end}}
+                                </table>
+                            </td>
+                        </tr>
+
+                        <tr height=10>
+                            <td colspan=3>
+                                &nbsp;
+                            </td>
+                        </tr>
+                        {{end}}
+                    </table>
+                </form>
+            </div>
+        </center>
+
+<script>
+function selectAll(source, ts) {
+    checkboxes = document.getElementsByName("drive");
+    for (var i in checkboxes) {
+        if (checkboxes[i].id == "drive_" + ts) {
+            checkboxes[i].checked = source.checked;
+        }
+    }
+}
+
+function deselectMaster(source, ts) {
+    if (!source.checked) {
+        var master = document.getElementById("master_" + ts);
+        if (master != null) {
+            master.checked = false;
+        }
+    }
+}
+
+function classify(classification) {
+    document.getElementById("action").value = "classify";
+    document.getElementById("classification").value = classification;
+    dayform.submit();
+}
+</script>
+    </body>
+</html>
+
