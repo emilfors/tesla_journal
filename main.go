@@ -11,7 +11,7 @@ import (
     "net/http"
     "html/template"
     "github.com/gorilla/mux"
-    _ "github.com/lib/pq"
+    "github.com/lib/pq"
     "github.com/goodsign/monday"
     "database/sql"
     "gopkg.in/gcfg.v1"
@@ -38,6 +38,17 @@ type Day struct {
     DateString                          string
     DateAsTs                            int64
     Drives                              []Drive
+    GroupedDrives                       []GroupedDrives
+}
+
+func (d Day) GetGroupedDrives(id int) *GroupedDrives {
+    for _, gd := range d.GroupedDrives {
+        if gd.Id == id {
+            return &gd
+        }
+    }
+
+    return nil
 }
 
 type Drive struct {
@@ -55,6 +66,15 @@ type Drive struct {
     Distance                            float32
     DistanceString                      string
     Classification                      sql.NullInt32
+    GroupId                             sql.NullInt32
+}
+
+func (d Drive) GroupIdInt() int {
+    if !d.GroupId.Valid {
+        return -1
+    }
+
+    return int(d.GroupId.Int32)
 }
 
 func (d Drive) ClassificationInt() int {
@@ -83,6 +103,35 @@ func (d Drive) ClassificationString() string {
     }
 
     switch d.Classification.Int32 {
+        case business: return "Tjänsteresa"
+        case private: return "Privat resa"
+        default: return ""
+    }
+}
+
+type GroupedDrives struct {
+    Id                                  int
+    DriveIds                            pq.Int64Array
+    StartDate                           time.Time
+    EndDate                             time.Time
+    StartTime                           string
+    EndTime                             string
+    StartAddress                        string
+    EndAddress                          string
+    Distance                            float32
+    DistanceString                      string
+    Duration                            int
+    DurationString                      string
+    Classification                      sql.NullInt32
+    Comment                             sql.NullString
+}
+
+func (gd GroupedDrives) ClassificationString() string {
+    if !gd.Classification.Valid {
+        return ""
+    }
+
+    switch gd.Classification.Int32 {
         case business: return "Tjänsteresa"
         case private: return "Privat resa"
         default: return ""
@@ -231,6 +280,11 @@ func servePost(w http.ResponseWriter, r *http.Request) {
         if err != nil {
             log.Println("Error changing drive classification")
         }
+    } else if action == "merge" {
+        err = mergeDrives(car, r.Form["drive"])
+        if err != nil {
+            log.Println("Error merging drives")
+        }
     }
 
     data := generateMain(year, month, car)
@@ -246,7 +300,7 @@ func changeClassification(classification int, drives []string) error {
         return errors.New("Attempt to classify drives failed; no drive ids specified")
     }
 
-    statement := "INSERT INTO public.classifications (drive_id, classification) VALUES "
+    statement := "INSERT INTO public.tj_classifications (drive_id, classification) VALUES "
     for _, driveId := range drives {
         statement += fmt.Sprintf("(%s, %d),", driveId, classification)
     }
@@ -261,6 +315,119 @@ func changeClassification(classification int, drives []string) error {
     return nil
 }
 
+func mergeDrives(car int, drives []string) error {
+    if len(drives) == 0 {
+        return errors.New("Attempt to merge drives failed; no drive ids specified")
+    }
+
+    statement := fmt.Sprintf(`
+    SELECT
+        start_date,
+        end_date,
+        duration_min,
+        distance,
+        COALESCE(start_geofence.name, CONCAT_WS(', ', COALESCE(start_address.name, nullif(CONCAT_WS(' ', start_address.road, start_address.house_number), '')), start_address.city)) AS start_address,
+        COALESCE(end_geofence.name, CONCAT_WS(', ', COALESCE(end_address.name, nullif(CONCAT_WS(' ', end_address.road, end_address.house_number), '')), end_address.city)) AS end_address,
+        classification
+    FROM drives
+        LEFT JOIN addresses start_address ON start_address_id = start_address.id
+        LEFT JOIN addresses end_address ON end_address_id = end_address.id
+        LEFT JOIN geofences start_geofence ON start_geofence_id = start_geofence.id
+        LEFT JOIN geofences end_geofence ON end_geofence_id = end_geofence.id
+        LEFT JOIN tj_classifications classification ON classification.drive_id = drives.id
+    WHERE car_id=%d AND drives.id=ANY('{`, car)
+    for _, driveId := range drives {
+        statement += driveId + ","
+    }
+    statement = strings.TrimRight(statement, ",")
+    statement += `}')
+    ORDER BY drives.id ASC;`
+
+    rows, _ := db.Query(statement)
+    defer rows.Close()
+
+    endDate := time.Unix(0, 0)
+    startDate := time.Unix(1 << 48 - 1, 0)
+    duration := 0
+    var distance float32
+    var startAddress, endAddress string
+    var classification sql.NullInt32
+    keepCheckingClassification := true
+    for rows.Next() {
+        var sd, ed time.Time
+        var dur int
+        var dist float32
+        var sa, ea string
+        var c sql.NullInt32
+        err := rows.Scan(&sd, &ed, &dur, &dist, &sa, &ea, &c)
+        if err != nil {
+            return err
+        }
+
+        duration += dur
+        distance += dist
+
+        if sd.Before(startDate) {
+            startDate = sd
+            startAddress = sa
+        }
+        if ed.After(endDate) {
+            endDate = ed
+            endAddress = ea
+        }
+
+        if keepCheckingClassification {
+            if !c.Valid {
+                classification.Valid = false
+                keepCheckingClassification = false
+            } else {
+                if !classification.Valid {
+                    classification = c
+                } else {
+                    if c.Int32 != classification.Int32 {
+                        classification.Valid = false
+                        keepCheckingClassification = false
+                    }
+                }
+            }
+        }
+    }
+
+    statement = `
+    INSERT INTO public.tj_grouped_drives
+    (drive_ids, start_date, end_date, start_address, end_address, distance, duration_min, classification)
+    VALUES
+    ('{`
+    for _, driveId := range drives {
+        statement += driveId + ","
+    }
+    statement = strings.TrimRight(statement, ",")
+    statement += "}', "
+    statement += "'" + startDate.Format("2006-01-02 15:04:05.000") + "'::timestamp, "
+    statement += "'" + endDate.Format("2006-01-02 15:04:05.000") + "'::timestamp, "
+    statement += "'" + startAddress + "', "
+    statement += "'" + endAddress + "', "
+    statement += fmt.Sprintf("%f, ", distance)
+    statement += fmt.Sprintf("%d, ", duration)
+    if classification.Valid {
+        statement += fmt.Sprintf("%d", classification.Int32)
+    } else {
+        statement += "null"
+    }
+    statement += ");"
+
+    _, err := db.Exec(statement)
+    if err != nil {
+        return err
+    }
+
+    return nil
+}
+
+func stripTime(from time.Time) time.Time {
+    return time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC)
+}
+
 func generateMain(year, month, carId int) MainData {
     var data MainData
 
@@ -270,7 +437,7 @@ func generateMain(year, month, carId int) MainData {
 
     cars, err := getCars()
     if err != nil {
-        log.Println("Error retrieving cars from database")
+        log.Println("Error retrieving cars from database: " + err.Error())
     }
     data.DropdownCars = cars
 
@@ -279,7 +446,12 @@ func generateMain(year, month, carId int) MainData {
 
     drives, err := getDrives(carId, from, to)
     if err != nil {
-        log.Println("Error retrieving drives from database")
+        log.Println("Error retrieving drives from database: " + err.Error())
+    }
+
+    groupedDrives, err := getGroupedDrives()
+    if err != nil {
+        log.Println("Error retrieving grouped drives from database: " + err.Error())
     }
 
     var days []Day
@@ -293,7 +465,11 @@ func generateMain(year, month, carId int) MainData {
             }
 
             day = new(Day)
-            day.Date = drive.StartDate
+            day.Date = stripTime(drive.StartDate)
+
+            if gd, exists := groupedDrives[day.Date]; exists {
+                day.GroupedDrives = gd
+            }
 
             t := convertTime(day.Date)
             day.DateString = strings.ToUpper(monday.Format(t, "Monday 2 January", monday.LocaleSvSE))
@@ -379,8 +555,8 @@ func minutesToHoursAndMinutes(minutes int) (int, int) {
 func getDrives(carId int, from, to time.Time) ([]Drive, error) {
     statement := fmt.Sprintf(`WITH data AS (
         SELECT
-        round(extract(epoch FROM start_date)) * 1000 AS start_date_ts,
-        round(extract(epoch FROM end_date)) * 1000 AS end_date_ts,
+        round(extract(epoch FROM drives.start_date)) * 1000 AS start_date_ts,
+        round(extract(epoch FROM drives.end_date)) * 1000 AS end_date_ts,
         car.id as car_id,
         start_km,
         end_km,
@@ -392,12 +568,13 @@ func getDrives(carId int, from, to time.Time) ([]Drive, error) {
         END as end_path,
         drives.id as drive_id,
         classification.classification,
-        start_date,
-        end_date,
-        duration_min,
+        grouped_drive.id AS grouped_drive_id,
+        drives.start_date,
+        drives.end_date,
+        drives.duration_min,
         COALESCE(start_geofence.name, CONCAT_WS(', ', COALESCE(start_address.name, nullif(CONCAT_WS(' ', start_address.road, start_address.house_number), '')), start_address.city)) AS start_address,
         COALESCE(end_geofence.name, CONCAT_WS(', ', COALESCE(end_address.name, nullif(CONCAT_WS(' ', end_address.road, end_address.house_number), '')), end_address.city)) AS end_address,
-        distance
+        drives.distance
         FROM drives
         LEFT JOIN addresses start_address ON start_address_id = start_address.id
         LEFT JOIN addresses end_address ON end_address_id = end_address.id
@@ -406,9 +583,10 @@ func getDrives(carId int, from, to time.Time) ([]Drive, error) {
         LEFT JOIN geofences start_geofence ON start_geofence_id = start_geofence.id
         LEFT JOIN geofences end_geofence ON end_geofence_id = end_geofence.id
         LEFT JOIN cars car ON car.id = drives.car_id
-        LEFT JOIN classifications classification ON classification.drive_id = drives.id
-        WHERE drives.car_id = %d AND start_date >= '%s'::date AND start_date <= '%s'::date
-        ORDER BY start_date DESC
+        LEFT JOIN tj_classifications classification ON classification.drive_id = drives.id
+        LEFT JOIN tj_grouped_drives grouped_drive ON drives.id = any(grouped_drive.drive_ids)
+        WHERE drives.car_id = %d AND drives.start_date >= '%s'::date AND drives.start_date <= '%s'::date
+        ORDER BY drives.start_date DESC
     )
     SELECT
     drive_id,
@@ -420,7 +598,8 @@ func getDrives(carId int, from, to time.Time) ([]Drive, error) {
     round(start_km::numeric) AS start_odo,
     round(end_km::numeric) AS end_odo,
     distance,
-    classification
+    classification,
+    grouped_drive_id
     FROM data;`, carId, from.Format("2006-01-02 15:04:05.000"), to.Format("2006-01-02 15:04:05.000"))
 
     var drives []Drive
@@ -431,7 +610,7 @@ func getDrives(carId int, from, to time.Time) ([]Drive, error) {
     for rows.Next() {
         var drive Drive
 
-        err := rows.Scan(&drive.Id, &drive.StartDate, &drive.EndDate, &drive.Duration, &drive.StartAddress, &drive.EndAddress, &drive.StartOdometer, &drive.EndOdometer, &drive.Distance, &drive.Classification)
+        err := rows.Scan(&drive.Id, &drive.StartDate, &drive.EndDate, &drive.Duration, &drive.StartAddress, &drive.EndAddress, &drive.StartOdometer, &drive.EndOdometer, &drive.Distance, &drive.Classification, &drive.GroupId)
         if err != nil {
             return nil, err
         }
@@ -447,6 +626,41 @@ func getDrives(carId int, from, to time.Time) ([]Drive, error) {
     }
 
     return drives, rows.Err()
+}
+
+func getGroupedDrives() (map[time.Time][]GroupedDrives, error) {
+    groupedDrives := make(map[time.Time][]GroupedDrives)
+
+    statement := "SELECT * FROM tj_grouped_drives;"
+
+    rows, _ := db.Query(statement)
+    defer rows.Close()
+
+    for rows.Next() {
+        var gd GroupedDrives
+
+        err := rows.Scan(&gd.Id, &gd.DriveIds, &gd.StartDate, &gd.EndDate, &gd.StartAddress, &gd.EndAddress, &gd.Distance, &gd.Duration, &gd.Classification, &gd.Comment)
+        if err != nil {
+            return nil, err
+        }
+
+        gd.StartTime = convertTime(gd.StartDate).Format("15:04")
+        gd.EndTime = convertTime(gd.EndDate).Format("15:04")
+
+        h, m := minutesToHoursAndMinutes(gd.Duration)
+        gd.DurationString = fmt.Sprintf("%d:%02d", h, m)
+        gd.DistanceString = fmt.Sprintf("%.2f", gd.Distance)
+
+        key := stripTime(gd.StartDate)
+        _, ok := groupedDrives[key]
+        if !ok {
+            groupedDrives[key] = make([]GroupedDrives, 0)
+        }
+
+        groupedDrives[key] = append(groupedDrives[key], gd)
+    }
+
+    return groupedDrives, rows.Err()
 }
 
 func getCars() ([]Car, error) {
@@ -481,13 +695,13 @@ func convertTime(t time.Time) time.Time {
 }
 
 func createTables() error {
-    statement := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS public.classifications
+    statement := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS public.tj_classifications
     (
         drive_id integer NOT NULL,
         classification integer,
         PRIMARY KEY (drive_id)
     );
-    ALTER TABLE public.classifications
+    ALTER TABLE public.tj_classifications
     OWNER to %s;`, config.Connection.User)
 
     _, err := db.Exec(statement)
@@ -496,6 +710,29 @@ func createTables() error {
     }
 
     fmt.Println("Classifications table exists.")
+
+    statement = fmt.Sprintf(`CREATE TABLE IF NOT EXISTS public.tj_grouped_drives
+    (
+        id SERIAL PRIMARY KEY,
+        drive_ids integer[] NOT NULL,
+        start_date timestamp without time zone NOT NULL,
+        end_date timestamp without time zone NOT NULL,
+        start_address character varying NOT NULL,
+        end_address character varying NOT NULL,
+        distance double precision NOT NULL,
+        duration_min smallint NOT NULL,
+        classification integer,
+        comment text
+    );
+    ALTER TABLE public.tj_grouped_drives
+    OWNER to %s;`, config.Connection.User)
+
+    _, err = db.Exec(statement)
+    if err != nil {
+        return err
+    }
+
+    fmt.Println("Grouped drives table exists.")
 
     return nil
 }

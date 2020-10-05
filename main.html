@@ -93,7 +93,8 @@ body {
                     <tr valign=bottom>
                         <td align=left>
                             <button type="button" onClick="classify('business')">Tjänsteresa</button>
-                            <button type="button" onClick="classify('private')">Privat resa</button>
+                            <button type="button" onClick="classify('private')">Privat resa</button><br>
+                            <button type="button" onClick="merge()">Sl� ihop</button>
                         </td>
 
                         <td align=right>
@@ -121,13 +122,18 @@ body {
 
                     <table cellpadding=0 cellspacing=0 width=900 border=0 dir=ltr>
                         {{range .Days}}
+                        {{$d := .}}
                         <tr>
                             <td colspan=3>
                                 <table width=100% class="day">
                                     {{$ts := .DateAsTs}}
                                     <tr height=10>
-                                        <td align=left width=50>
+                                        <td align=left width=25>
                                             <input type="checkbox" id="master_{{$ts}}" onClick="selectAll(this, '{{$ts}}')"/>
+                                        </td>
+
+                                        <td width=25>
+                                            &nbsp;
                                         </td>
 
                                         <td align=left colspan=5>
@@ -136,15 +142,74 @@ body {
                                     </tr>
 
                                     <tr height=10>
-                                        <td colspan=6>
+                                        <td colspan=7>
                                             &nbsp;
                                         </td>
                                     </tr>
 
+                                    {{$currentGroupId := -1}}
                                     {{range .Drives}}
+                                    {{$gid := .GroupIdInt}}
+                                    {{if ne $gid -1}}
+                                    {{if ne $gid $currentGroupId}}
+                                    {{$currentGroupId = .GroupIdInt}}
+                                    {{$gd := $d.GetGroupedDrives $currentGroupId}}
                                     <tr>
-                                        <td align=left width=50>
+                                        <td align=left valign=center width=25>
                                             <input type="checkbox" id="drive_{{$ts}}" name="drive" value="{{.Id}}" onClick="deselectMaster(this, '{{$ts}}')"/>
+                                        </td>
+
+                                        <td align=center valign=center width=25>
+                                            *
+                                        </td>
+
+                                        <td align=left width=250>
+                                            <span lang=sv style='font-size: 10.0pt; font-family:Calibri;language:sv'>
+                                                {{$gd.StartAddress}}<br>
+                                                {{$gd.EndAddress}}
+                                            </span>
+                                        </td>
+
+                                        <td align=right width=50>
+                                            <span lang=sv style='font-size: 10.0pt;font-family:Calibri;language:sv'>
+                                                {{$gd.StartTime}}<br>
+                                                {{$gd.EndTime}}
+                                            </span>
+                                        </td>
+
+                                        <td width=150>
+                                            &nbsp;
+                                        </td>
+
+                                        <td align=left width=250>
+                                            <span lang=sv style='font-size: 10.0pt;font-family:Calibri;language:sv'>
+                                                Körsträcka: {{$gd.DistanceString}} km<br>
+                                                Tid: {{$gd.DurationString}}
+                                            </span>
+                                        </td>
+
+                                        <td align=right width=150>
+                                            <span class={{.ClassificationClass}}>
+                                                {{$gd.ClassificationString}}
+                                            </span>
+                                        </td>
+                                    </tr>
+
+                                    <tr height=10>
+                                        <td colspan=7>
+                                            &nbsp;
+                                        </td>
+                                    </tr>
+                                    {{end}}
+                                    {{end}}
+                                    {{if eq .GroupIdInt -1}}
+                                    <tr>
+                                        <td align=left valign=center width=25>
+                                            <input type="checkbox" id="drive_{{$ts}}" name="drive" value="{{.Id}}" onClick="deselectMaster(this, '{{$ts}}')"/>
+                                        </td>
+
+                                        <td width=25>
+                                            &nbsp;
                                         </td>
 
                                         <td align=left width=250>
@@ -180,10 +245,11 @@ body {
                                     </tr>
 
                                     <tr height=10>
-                                        <td colspan=6>
+                                        <td colspan=7>
                                             &nbsp;
                                         </td>
                                     </tr>
+                                    {{end}}
                                     {{end}}
                                 </table>
                             </td>
@@ -222,6 +288,11 @@ function deselectMaster(source, ts) {
 function classify(classification) {
     document.getElementById("action").value = "classify";
     document.getElementById("classification").value = classification;
+    dayform.submit();
+}
+
+function merge() {
+    document.getElementById("action").value = "merge";
     dayform.submit();
 }
 </script>
