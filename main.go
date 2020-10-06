@@ -165,6 +165,7 @@ type Month struct {
 }
 
 type MainData struct {
+    ScrollPosition                      int
     Year                                int
     Month                               int
     CarId                               int
@@ -182,6 +183,7 @@ type MainData struct {
 
 var db *sql.DB
 var config Config
+var scrollPosition int
 
 var mainTemplate *template.Template = template.Must(template.ParseFiles("main.html"))
 
@@ -210,6 +212,7 @@ func main() {
     }
     defer db.Close()
 
+    // sql.Open doesn't actually open the database; ping it for that to happen:
     err = db.Ping()
     if err != nil {
         fmt.Fprintf(os.Stderr, "Unable to open database: %v\n", err)
@@ -266,7 +269,7 @@ func serveGet(w http.ResponseWriter, r *http.Request) {
     month := int(time.Now().Month())
     car := 1
 
-    data := generateMain(year, month, car)
+    data := generateMain(year, month, car, 0)
 
     err := mainTemplate.Execute(w, data)
     if (err != nil) {
@@ -314,7 +317,11 @@ func servePost(w http.ResponseWriter, r *http.Request) {
         }
     }
 
-    data := generateMain(year, month, car)
+    scrollPos, err := strconv.Atoi(r.Form.Get("scrollposition"))
+    if err != nil {
+        scrollPos = 0
+    }
+    data := generateMain(year, month, car, scrollPos)
 
     err = mainTemplate.Execute(w, data)
     if (err != nil) {
@@ -531,12 +538,13 @@ func stripTime(from time.Time) time.Time {
     return time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-func generateMain(year, month, carId int) MainData {
+func generateMain(year, month, carId, scrollPosition int) MainData {
     var data MainData
 
     data.Year = year
     data.Month = month
     data.CarId = carId
+    data.ScrollPosition = scrollPosition
 
     cars, err := getCars()
     if err != nil {

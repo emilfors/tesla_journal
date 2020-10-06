@@ -124,7 +124,7 @@ body {
 
     </head>
 
-    <body>
+    <body onload="init()">
         <center>
             <div class="header sticky" id="pageHeader">
                 <table cellpadding=0 cellspacing=0 width=900 height=200 border=0 dir=ltr>
@@ -191,6 +191,7 @@ body {
                 <form id="dayform" action="/" method="post">
                     <input type="hidden" id="action" name="action" value="">
                     <input type="hidden" id="classification" name="classification" value="">
+                    <input type="hidden" id="scrollposition" name="scrollposition" value="0">
                     <input type="hidden" name="year" value="{{$y}}">
                     <input type="hidden" name="month" value="{{$m}}">
                     <input type="hidden" name="car" value="{{$c}}">
@@ -423,21 +424,28 @@ function driveMarkToggled(source, ts) {
 function classify(classification) {
     document.getElementById("action").value = "classify";
     document.getElementById("classification").value = classification;
+    document.getElementById("scrollposition").value = document.documentElement.scrollTop || document.body.scrollTop;
     dayform.submit();
 }
 
 function group() {
     document.getElementById("action").value = "group";
+    document.getElementById("scrollposition").value = document.documentElement.scrollTop || document.body.scrollTop;
     dayform.submit();
 }
 
 function ungroup() {
     document.getElementById("action").value = "ungroup";
+    document.getElementById("scrollposition").value = document.documentElement.scrollTop || document.body.scrollTop;
     dayform.submit();
 }
 
 function reloadPage() {
     window.location = window.location.href;
+}
+
+function init() {
+    document.documentElement.scrollTop = document.body.scrollTop = {{.ScrollPosition}};
 }
 </script>
     </body>
