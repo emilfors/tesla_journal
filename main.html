@@ -58,10 +58,16 @@ body {
     border-radius: 5px;
     background-color: white;
     color: black;
-    padding: 14px 28px;
+    padding: 10px 28px;
     font-size: 14px;
     cursor: pointer;
     width: 150px;
+}
+
+.btn:disabled {
+    border-color: #e7e7e7;
+    color: black;
+    background: #e7e7e7;
 }
 
 /* Blue */
@@ -70,7 +76,7 @@ body {
     color: dodgerblue
 }
 
-.businessClass:hover {
+.businessClass:hover:not([disabled]) {
     background: #2196F3;
     color: white;
 }
@@ -81,7 +87,7 @@ body {
     color: orange;
 }
 
-.privateClass:hover {
+.privateClass:hover:not([disabled]) {
     background: #ff9800;
     color: white;
 }
@@ -92,7 +98,7 @@ body {
     color: green;
 }
 
-.group:hover {
+.group:hover:not([disabled]) {
     background-color: #4CAF50;
     color: white;
 }
@@ -103,19 +109,9 @@ body {
     color: red
 }
 
-.ungroup:hover {
+.ungroup:hover:not([disabled]) {
     background: #f44336;
     color: white;
-}
-
-/* Gray */
-.disabled {
-    border-color: #e7e7e7;
-    color: black;
-}
-
-.disabled:hover {
-    background: #e7e7e7;
 }
         </style>
 
@@ -128,15 +124,15 @@ body {
 
     </head>
 
-    <body>
+    <body onload="init()">
         <center>
             <div class="header sticky" id="pageHeader">
                 <table cellpadding=0 cellspacing=0 width=900 height=200 border=0 dir=ltr>
                     <tr height=100 width=100%>
                         <form id="selectform" action="/" method="post">
                             <td align=left valign=top>
-                                <span style='font-size: 18.0pt;font-weight:bold;'>
-                                    Tesla Körjournal
+                                <span>
+                                    <a href="javascript:reloadPage()" style="font-size: 18.0pt;text-decoration:none;color:black;font-weight:bold;">Tesla Körjournal</a>
                                 </span>
                             </td>
 
@@ -169,10 +165,11 @@ body {
 
                     <tr valign=bottom>
                         <td align=left>
-                            <button name="businessbtn" class="btn businessClass" onClick="classify('business')">Tjänsteresa</button>
-                            <button name="privatebtn" class="btn privateClass" onClick="classify('private')">Privat resa</button><br>
-                            <button name="groupbtn" class="btn disabled" onClick="group()">Gruppera</button>
-                            <button name="ungroupbtn" class="btn disabled" onClick="ungroup()">Avgruppera</button>
+                            <button id="btn_business" class="btn businessClass" onClick="classify('business')">Tjänsteresa</button>
+                            <button id="btn_private" class="btn privateClass" onClick="classify('private')">Privat resa</button><br>
+                            <br>
+                            <button id="btn_group" class="btn group" onClick="group()">Gruppera</button>
+                            <button id="btn_ungroup" class="btn ungroup" onClick="ungroup()">Avgruppera</button>
                         </td>
 
                         <td align=right>
@@ -361,10 +358,12 @@ function selectAll(source, ts) {
             checkboxes[i].checked = source.checked;
         }
     }
+
+    driveMarkToggled(null, ts);
 }
 
 function driveMarkToggled(source, ts) {
-    if (!source.checked) {
+    if (source != null && !source.checked) {
         var master = document.getElementById("master_" + ts);
         if (master != null) {
             master.checked = false;
@@ -376,30 +375,48 @@ function driveMarkToggled(source, ts) {
 
     checkboxes = document.getElementsByName("drive");
     for (var i in checkboxes) {
-        if (checkboxes[i].id == "drive_" + ts) {
-            if (checkboxes[i].checked) {
-                drivesMarked += 1;
-            }
+        if (checkboxes[i].checked) {
+            drivesMarked += 1;
         }
     }
 
     checkboxes = document.getElementsByName("groupeddrive");
     for (var i in checkboxes) {
-        if (checkboxes[i].id == "groupeddrive_" + ts) {
-            if (checkboxes[i].checked) {
-                groupedDrivesMarked += 1;
-            }
+        if (checkboxes[i].checked) {
+            groupedDrivesMarked += 1;
         }
     }
 
+    var btnBusiness = document.getElementById("btn_business");
+    var btnPrivate = document.getElementById("btn_private");
+    var btnGroup = document.getElementById("btn_group");
+    var btnUngroup = document.getElementById("btn_ungroup");
+
+
     if (drivesMarked > 0 && groupedDrivesMarked == 0) {
         // disable ungroup button, enable classifying buttons
+        btnBusiness.disabled = false;
+        btnPrivate.disabled = false;
+        btnGroup.disabled = drivesMarked == 1;
+        btnUngroup.disabled = true;
     } else if (drivesMarked == 0 && groupedDrivesMarked > 0) {
         // disable group button, enable classifying buttons
+        btnBusiness.disabled = false;
+        btnPrivate.disabled = false;
+        btnGroup.disabled = true;
+        btnUngroup.disabled = false;
     } else if (drivesMarked > 0 && groupedDrivesMarked > 0) {
         // disable both group and ungroup buttons, enable classifying buttons
+        btnBusiness.disabled = false;
+        btnPrivate.disabled = false;
+        btnGroup.disabled = true;
+        btnUngroup.disabled = true;
     } else {
         // disable all buttons
+        btnBusiness.disabled = true;
+        btnPrivate.disabled = true;
+        btnGroup.disabled = true;
+        btnUngroup.disabled = true;
     }
 }
 
@@ -419,10 +436,21 @@ function ungroup() {
     dayform.submit();
 }
 
-var businessButtonEnabled = false;
-var privateButtonEnabled = false;
-var groupingButtonEnabled = false;
-var ungroupingButtonEnabled = false;
+function reloadPage() {
+    window.location = window.location.href;
+}
+
+function init() {
+    var btnBusiness = document.getElementById("btn_business");
+    var btnPrivate = document.getElementById("btn_private");
+    var btnGroup = document.getElementById("btn_group");
+    var btnUngroup = document.getElementById("btn_ungroup");
+
+    btnBusiness.disabled = true;
+    btnPrivate.disabled = true;
+    btnGroup.disabled = true;
+    btnUngroup.disabled = true;
+}
 </script>
     </body>
 </html>
