@@ -31,7 +31,7 @@ body {
 }
 
 .day {
-    background-color: #fafafa;
+    background-color: #fafaff;
     border: solid black 2px;
     -moz-border-radius: 8px;
     -webkit-border-radius: 8px;
@@ -39,16 +39,93 @@ body {
     padding: 20px;
 }
 
+.weekend {
+    background-color: #fffafa;
+}
+
 .business {
-    color: #0000ff;
+    color: #2196f3;
     font-size: 10.0pt;
 }
 
 .private {
-    color: #ff00ff;
+    color: #ff9800;
     font-size: 10.0pt;
 }
+
+.btn {
+    border: 2px solid black;
+    border-radius: 5px;
+    background-color: white;
+    color: black;
+    padding: 14px 28px;
+    font-size: 14px;
+    cursor: pointer;
+    width: 150px;
+}
+
+/* Blue */
+.businessClass {
+    border-color: #2196F3;
+    color: dodgerblue
+}
+
+.businessClass:hover {
+    background: #2196F3;
+    color: white;
+}
+
+/* Orange */
+.privateClass {
+    border-color: #ff9800;
+    color: orange;
+}
+
+.privateClass:hover {
+    background: #ff9800;
+    color: white;
+}
+
+/* Green */
+.group {
+    border-color: #4CAF50;
+    color: green;
+}
+
+.group:hover {
+    background-color: #4CAF50;
+    color: white;
+}
+
+/* Red */
+.ungroup {
+    border-color: #f44336;
+    color: red
+}
+
+.ungroup:hover {
+    background: #f44336;
+    color: white;
+}
+
+/* Gray */
+.disabled {
+    border-color: #e7e7e7;
+    color: black;
+}
+
+.disabled:hover {
+    background: #e7e7e7;
+}
         </style>
+
+        <svg width="0" height="0">
+            <!-- Created by Nick Bluth from the Noun Project -->
+            <defs>
+            <path id="merge" fill-rule="evenodd" fill="gray" d="M13,8 L13,13.1715729 C13,13.9672223 12.6839295,14.7302841 12.1213203,15.2928932 L7.70710678,19.7071068 C7.31658249,20.0976311 6.68341751,20.0976311 6.29289322,19.7071068 C5.90236893,19.3165825 5.90236893,18.6834175 6.29289322,18.2928932 L10.7071068,13.8786797 C10.8946432,13.6911433 11,13.4367894 11,13.1715729 L11,8 L8.37480909,8 C8.20912366,8 8.07480909,7.86568542 8.07480909,7.7 C8.07480909,7.61872484 8.10778542,7.54092765 8.16619251,7.48440983 L11.6523055,4.11106044 C11.8461532,3.92348305 12.1538464,3.92348305 12.3476941,4.11106044 L15.8338071,7.48440983 C15.9528743,7.59962558 15.9559965,7.78954942 15.8407807,7.90861658 C15.7842629,7.96702366 15.7064657,8 15.6251905,8 L13,8 Z M13.2928932,16.7071068 C12.9023689,16.3165825 12.9023689,15.6834175 13.2928932,15.2928932 C13.6834175,14.9023689 14.3165825,14.9023689 14.7071068,15.2928932 L17.7071068,18.2928932 C18.0976311,18.6834175 18.0976311,19.3165825 17.7071068,19.7071068 C17.3165825,20.0976311 16.6834175,20.0976311 16.2928932,19.7071068 L13.2928932,16.7071068 Z"/>
+            </defs>
+        </svg>
+
     </head>
 
     <body>
@@ -63,7 +140,7 @@ body {
                                 </span>
                             </td>
 
-                            <td align=center valign=top>
+                            <td align=right valign=top>
                                 {{$y := .Year}}
                                 {{$m := .Month}}
                                 <select id="month" name="month" onchange="selectform.submit()">
@@ -92,9 +169,10 @@ body {
 
                     <tr valign=bottom>
                         <td align=left>
-                            <button type="button" onClick="classify('business')">Tjänsteresa</button>
-                            <button type="button" onClick="classify('private')">Privat resa</button><br>
-                            <button type="button" onClick="merge()">Sl� ihop</button>
+                            <button name="businessbtn" class="btn businessClass" onClick="classify('business')">Tjänsteresa</button>
+                            <button name="privatebtn" class="btn privateClass" onClick="classify('private')">Privat resa</button><br>
+                            <button name="groupbtn" class="btn disabled" onClick="group()">Gruppera</button>
+                            <button name="ungroupbtn" class="btn disabled" onClick="ungroup()">Avgruppera</button>
                         </td>
 
                         <td align=right>
@@ -125,7 +203,11 @@ body {
                         {{$d := .}}
                         <tr>
                             <td colspan=3>
+                                {{if .IsWeekend}}
+                                <table width=100% class="day weekend">
+                                {{else}}
                                 <table width=100% class="day">
+                                {{end}}
                                     {{$ts := .DateAsTs}}
                                     <tr height=10>
                                         <td align=left width=25>
@@ -156,11 +238,13 @@ body {
                                     {{$gd := $d.GetGroupedDrives $currentGroupId}}
                                     <tr>
                                         <td align=left valign=center width=25>
-                                            <input type="checkbox" id="drive_{{$ts}}" name="drive" value="{{.Id}}" onClick="deselectMaster(this, '{{$ts}}')"/>
+                                            <input type="checkbox" id="groupeddrive_{{$ts}}" name="groupeddrive" value="{{$currentGroupId}}" onClick="driveMarkToggled(this, '{{$ts}}')"/>
                                         </td>
 
                                         <td align=center valign=center width=25>
-                                            *
+                                            <svg width="24" height="30">
+                                                <use x="0" y="0" xlink:href="#merge"/>
+                                            </svg>
                                         </td>
 
                                         <td align=left width=250>
@@ -188,10 +272,8 @@ body {
                                             </span>
                                         </td>
 
-                                        <td align=right width=150>
-                                            <span class={{.ClassificationClass}}>
-                                                {{$gd.ClassificationString}}
-                                            </span>
+                                        <td class={{.ClassificationClass}} align=right width=150>
+                                            {{$gd.ClassificationString}}
                                         </td>
                                     </tr>
 
@@ -205,7 +287,7 @@ body {
                                     {{if eq .GroupIdInt -1}}
                                     <tr>
                                         <td align=left valign=center width=25>
-                                            <input type="checkbox" id="drive_{{$ts}}" name="drive" value="{{.Id}}" onClick="deselectMaster(this, '{{$ts}}')"/>
+                                            <input type="checkbox" id="drive_{{$ts}}" name="drive" value="{{.Id}}" onClick="driveMarkToggled(this, '{{$ts}}')"/>
                                         </td>
 
                                         <td width=25>
@@ -214,15 +296,15 @@ body {
 
                                         <td align=left width=250>
                                             <span lang=sv style='font-size: 10.0pt; font-family:Calibri;language:sv'>
-                                                {{.StartAddress}}<br>
-                                                {{.EndAddress}}
+                                                {{.EndAddress}}<br>
+                                                {{.StartAddress}}
                                             </span>
                                         </td>
 
                                         <td align=right width=50>
                                             <span lang=sv style='font-size: 10.0pt;font-family:Calibri;language:sv'>
-                                                {{.StartTime}}<br>
-                                                {{.EndTime}}
+                                                {{.EndTime}}<br>
+                                                {{.StartTime}}
                                             </span>
                                         </td>
 
@@ -237,10 +319,8 @@ body {
                                             </span>
                                         </td>
 
-                                        <td align=right width=150>
-                                            <span class={{.ClassificationClass}}>
-                                                {{.ClassificationString}}
-                                            </span>
+                                        <td class={{.ClassificationClass}} align=right width=150>
+                                            {{.ClassificationString}}
                                         </td>
                                     </tr>
 
@@ -274,14 +354,52 @@ function selectAll(source, ts) {
             checkboxes[i].checked = source.checked;
         }
     }
+
+    checkboxes = document.getElementsByName("groupeddrive");
+    for (var i in checkboxes) {
+        if (checkboxes[i].id == "groupeddrive_" + ts) {
+            checkboxes[i].checked = source.checked;
+        }
+    }
 }
 
-function deselectMaster(source, ts) {
+function driveMarkToggled(source, ts) {
     if (!source.checked) {
         var master = document.getElementById("master_" + ts);
         if (master != null) {
             master.checked = false;
         }
+    }
+
+    var drivesMarked = 0;
+    var groupedDrivesMarked = 0;
+
+    checkboxes = document.getElementsByName("drive");
+    for (var i in checkboxes) {
+        if (checkboxes[i].id == "drive_" + ts) {
+            if (checkboxes[i].checked) {
+                drivesMarked += 1;
+            }
+        }
+    }
+
+    checkboxes = document.getElementsByName("groupeddrive");
+    for (var i in checkboxes) {
+        if (checkboxes[i].id == "groupeddrive_" + ts) {
+            if (checkboxes[i].checked) {
+                groupedDrivesMarked += 1;
+            }
+        }
+    }
+
+    if (drivesMarked > 0 && groupedDrivesMarked == 0) {
+        // disable ungroup button, enable classifying buttons
+    } else if (drivesMarked == 0 && groupedDrivesMarked > 0) {
+        // disable group button, enable classifying buttons
+    } else if (drivesMarked > 0 && groupedDrivesMarked > 0) {
+        // disable both group and ungroup buttons, enable classifying buttons
+    } else {
+        // disable all buttons
     }
 }
 
@@ -291,10 +409,20 @@ function classify(classification) {
     dayform.submit();
 }
 
-function merge() {
-    document.getElementById("action").value = "merge";
+function group() {
+    document.getElementById("action").value = "group";
     dayform.submit();
 }
+
+function ungroup() {
+    document.getElementById("action").value = "ungroup";
+    dayform.submit();
+}
+
+var businessButtonEnabled = false;
+var privateButtonEnabled = false;
+var groupingButtonEnabled = false;
+var ungroupingButtonEnabled = false;
 </script>
     </body>
 </html>

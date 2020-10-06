@@ -51,6 +51,17 @@ func (d Day) GetGroupedDrives(id int) *GroupedDrives {
     return nil
 }
 
+func (d Day) IsWeekend() bool {
+    switch d.Date.Weekday() {
+    case time.Saturday:
+        fallthrough
+    case time.Sunday:
+        return true
+    }
+
+    return false
+}
+
 type Drive struct {
     Id                                  int
     StartDate                           time.Time
@@ -111,6 +122,7 @@ func (d Drive) ClassificationString() string {
 
 type GroupedDrives struct {
     Id                                  int
+    CarId                               int
     DriveIds                            pq.Int64Array
     StartDate                           time.Time
     EndDate                             time.Time
@@ -276,14 +288,19 @@ func servePost(w http.ResponseWriter, r *http.Request) {
 
     action := r.Form.Get("action")
     if action == "classify" {
-        err = changeClassification(getClassificationId(r.Form.Get("classification")), r.Form["drive"])
+        err = changeClassification(getClassificationId(r.Form.Get("classification")), r.Form["drive"], r.Form["groupeddrive"])
         if err != nil {
             log.Println("Error changing drive classification")
         }
-    } else if action == "merge" {
-        err = mergeDrives(car, r.Form["drive"])
+    } else if action == "group" {
+        err = groupDrives(car, r.Form["drive"])
         if err != nil {
-            log.Println("Error merging drives")
+            log.Println("Error grouping drives")
+        }
+    } else if action == "ungroup" {
+        err = ungroupDrives(car, r.Form["groupeddrive"])
+        if err != nil {
+            log.Println("Error ungrouping drives")
         }
     }
 
@@ -295,17 +312,93 @@ func servePost(w http.ResponseWriter, r *http.Request) {
     }
 }
 
-func changeClassification(classification int, drives []string) error {
-    if len(drives) == 0 {
-        return errors.New("Attempt to classify drives failed; no drive ids specified")
+func changeClassification(classification int, drives []string, groupedDrives []string) error {
+    if (len(drives) + len(groupedDrives)) == 0 {
+        return errors.New("Attempt to classify drives failed; no drive ids or grouped drive ids specified")
     }
 
+    groupedDriveIds, err := getDriveIdsForGroups(groupedDrives)
+    if err != nil {
+        return err
+    }
+
+    ids := append(drives, groupedDriveIds...)
+
     statement := "INSERT INTO public.tj_classifications (drive_id, classification) VALUES "
-    for _, driveId := range drives {
+    for _, driveId := range ids {
         statement += fmt.Sprintf("(%s, %d),", driveId, classification)
     }
     statement = strings.TrimRight(statement, ",")
     statement += " ON CONFLICT(drive_id) DO UPDATE SET classification = excluded.classification;"
+
+    _, err = db.Exec(statement)
+    if err != nil {
+        return err
+    }
+
+    if len(groupedDrives) != 0 {
+        statement = fmt.Sprintf(`
+        UPDATE public.tj_grouped_drives
+        SET classification=%d
+        WHERE id=ANY('{`, classification)
+        for _, gid := range groupedDrives {
+            statement += gid + ","
+        }
+        statement = strings.TrimRight(statement, ",")
+        statement += `}');`
+
+        _, err = db.Exec(statement)
+        if err != nil {
+            return err
+        }
+    }
+
+    return nil
+}
+
+func getDriveIdsForGroups(groupedDrives []string) ([]string, error) {
+    var groupedDriveIds []string
+
+    statement := `
+    SELECT drive_ids::text[]
+    FROM tj_grouped_drives
+    WHERE id=ANY('{`
+    for _, gid := range groupedDrives {
+        statement += gid + ","
+    }
+    statement = strings.TrimRight(statement, ",")
+    statement += `}');`
+
+    rows, _ := db.Query(statement)
+    defer rows.Close()
+
+    for rows.Next() {
+        var ids pq.StringArray
+
+        err := rows.Scan(&ids)
+        if err != nil {
+            return nil, err
+        }
+
+        groupedDriveIds = append(groupedDriveIds, ids...)
+    }
+
+    return groupedDriveIds, rows.Err()
+}
+
+func ungroupDrives(car int, groupedDrives []string) error {
+    if len(groupedDrives) == 0 {
+        return errors.New("Attempt to ungroup drives failed; no group drive ids specified")
+    }
+
+    statement := `
+    DELETE FROM tj_grouped_drives
+    WHERE id=ANY('{`
+    for _, gid := range groupedDrives {
+        statement += gid + ","
+    }
+    statement = strings.TrimRight(statement, ",")
+    statement += "}');"
 
     _, err := db.Exec(statement)
     if err != nil {
@@ -315,9 +408,9 @@ func changeClassification(classification int, drives []string) error {
     return nil
 }
 
-func mergeDrives(car int, drives []string) error {
+func groupDrives(car int, drives []string) error {
     if len(drives) == 0 {
-        return errors.New("Attempt to merge drives failed; no drive ids specified")
+        return errors.New("Attempt to group drives failed; no drive ids specified")
     }
 
     statement := fmt.Sprintf(`
@@ -393,11 +486,11 @@ func mergeDrives(car int, drives []string) error {
         }
     }
 
-    statement = `
+    statement = fmt.Sprintf(`
     INSERT INTO public.tj_grouped_drives
-    (drive_ids, start_date, end_date, start_address, end_address, distance, duration_min, classification)
+    (car_id, drive_ids, start_date, end_date, start_address, end_address, distance, duration_min, classification)
     VALUES
-    ('{`
+    (%d, '{`, car)
     for _, driveId := range drives {
         statement += driveId + ","
     }
@@ -584,7 +677,7 @@ func getDrives(carId int, from, to time.Time) ([]Drive, error) {
         LEFT JOIN geofences end_geofence ON end_geofence_id = end_geofence.id
         LEFT JOIN cars car ON car.id = drives.car_id
         LEFT JOIN tj_classifications classification ON classification.drive_id = drives.id
-        LEFT JOIN tj_grouped_drives grouped_drive ON drives.id = any(grouped_drive.drive_ids)
+        LEFT JOIN tj_grouped_drives grouped_drive ON drives.car_id=grouped_drive.car_id AND drives.id = ANY(grouped_drive.drive_ids)
         WHERE drives.car_id = %d AND drives.start_date >= '%s'::date AND drives.start_date <= '%s'::date
         ORDER BY drives.start_date DESC
     )
@@ -639,7 +732,7 @@ func getGroupedDrives() (map[time.Time][]GroupedDrives, error) {
     for rows.Next() {
         var gd GroupedDrives
 
-        err := rows.Scan(&gd.Id, &gd.DriveIds, &gd.StartDate, &gd.EndDate, &gd.StartAddress, &gd.EndAddress, &gd.Distance, &gd.Duration, &gd.Classification, &gd.Comment)
+        err := rows.Scan(&gd.Id, &gd.CarId, &gd.DriveIds, &gd.StartDate, &gd.EndDate, &gd.StartAddress, &gd.EndAddress, &gd.Distance, &gd.Duration, &gd.Classification, &gd.Comment)
         if err != nil {
             return nil, err
         }
@@ -714,6 +807,7 @@ func createTables() error {
     statement = fmt.Sprintf(`CREATE TABLE IF NOT EXISTS public.tj_grouped_drives
     (
         id SERIAL PRIMARY KEY,
+        car_id integer NOT NULL,
         drive_ids integer[] NOT NULL,
         start_date timestamp without time zone NOT NULL,
         end_date timestamp without time zone NOT NULL,
