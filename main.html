@@ -124,7 +124,7 @@ body {
 
     </head>
 
-    <body onload="init()">
+    <body>
         <center>
             <div class="header sticky" id="pageHeader">
                 <table cellpadding=0 cellspacing=0 width=900 height=200 border=0 dir=ltr>
@@ -165,11 +165,11 @@ body {
 
                     <tr valign=bottom>
                         <td align=left>
-                            <button id="btn_business" class="btn businessClass" onClick="classify('business')">Tjänsteresa</button>
-                            <button id="btn_private" class="btn privateClass" onClick="classify('private')">Privat resa</button><br>
+                            <button disabled id="btn_business" class="btn businessClass" onClick="classify('business')">Tjänsteresa</button>
+                            <button disabled id="btn_private" class="btn privateClass" onClick="classify('private')">Privat resa</button><br>
                             <br>
-                            <button id="btn_group" class="btn group" onClick="group()">Gruppera</button>
-                            <button id="btn_ungroup" class="btn ungroup" onClick="ungroup()">Avgruppera</button>
+                            <button disabled id="btn_group" class="btn group" onClick="group()">Gruppera</button>
+                            <button disabled id="btn_ungroup" class="btn ungroup" onClick="ungroup()">Avgruppera</button>
                         </td>
 
                         <td align=right>
@@ -438,18 +438,6 @@ function ungroup() {
 
 function reloadPage() {
     window.location = window.location.href;
-}
-
-function init() {
-    var btnBusiness = document.getElementById("btn_business");
-    var btnPrivate = document.getElementById("btn_private");
-    var btnGroup = document.getElementById("btn_group");
-    var btnUngroup = document.getElementById("btn_ungroup");
-
-    btnBusiness.disabled = true;
-    btnPrivate.disabled = true;
-    btnGroup.disabled = true;
-    btnUngroup.disabled = true;
 }
 </script>
     </body>
