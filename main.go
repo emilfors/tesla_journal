@@ -31,6 +31,9 @@ type Config struct {
         Password                        string
         DB                              string
     }
+    Service struct {
+        Port                            int
+    }
 }
 
 type Day struct {
@@ -185,6 +188,13 @@ var mainTemplate *template.Template = template.Must(template.ParseFiles("main.ht
 func main() {
     var err error
 
+    // sane default config values:
+    config.Connection.Host = "localhost"
+    config.Connection.Port = 5432
+    config.Connection.User = "teslamate"
+    config.Connection.DB = "teslamate"
+    config.Service.Port = 4001
+
     err = gcfg.ReadFileInto(&config, "tesla_journal.cfg")
     if err != nil {
         fmt.Fprintf(os.Stderr, "Unable to read configuration: %v\n", err)
@@ -215,7 +225,7 @@ func main() {
     }
 
     // start serving requests:
-    port := "80"
+    port := strconv.Itoa(config.Service.Port)
 
     r := mux.NewRouter()
     r.HandleFunc("/", serveGet).Methods(http.MethodGet)
