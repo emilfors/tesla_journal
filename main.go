@@ -236,11 +236,18 @@ func main() {
     r.HandleFunc("/", serveGet).Methods(http.MethodGet)
     r.HandleFunc("/", servePost).Methods(http.MethodPost)
 
-    fmt.Println("Listening on secure port " + port)
-    err = http.ListenAndServeTLS(":" + port, config.Service.CertFile, config.Service.KeyFile, r)
-    if err != nil {
-        fmt.Println("Secure mode failed: " + err.Error())
-        fmt.Println("Fallback to non-secure listening on port " + port)
+    secure := config.Service.CertFile != "" && config.Service.KeyFile != ""
+    if secure {
+        fmt.Println("Listening on secure port " + port)
+        err = http.ListenAndServeTLS(":" + port, config.Service.CertFile, config.Service.KeyFile, r)
+        if err != nil {
+            fmt.Println("Secure mode failed: " + err.Error())
+            secure = false
+        }
+    }
+
+    if !secure {
+        fmt.Println("Listening on non-secure port " + port)
         err = http.ListenAndServe(":" + port, r)
     }
 
