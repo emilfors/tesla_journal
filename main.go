@@ -33,6 +33,8 @@ type Config struct {
     }
     Service struct {
         Port                            int
+        CertFile                        string
+        KeyFile                         string
     }
 }
 
@@ -234,9 +236,15 @@ func main() {
     r.HandleFunc("/", serveGet).Methods(http.MethodGet)
     r.HandleFunc("/", servePost).Methods(http.MethodPost)
 
-    fmt.Println("Now listening on port " + port)
+    fmt.Println("Listening on secure port " + port)
+    err = http.ListenAndServeTLS(":" + port, config.Service.CertFile, config.Service.KeyFile, r)
+    if err != nil {
+        fmt.Println("Secure mode failed: " + err.Error())
+        fmt.Println("Fallback to non-secure listening on port " + port)
+        err = http.ListenAndServe(":" + port, r)
+    }
 
-    log.Fatal(http.ListenAndServe(":" + port, r))
+    log.Fatal(err)
 }
 
 func getIntParam(r *http.Request, param string, into *int) error {
