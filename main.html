@@ -176,12 +176,18 @@ body {
                             Total körsträcka: {{.TotalDistanceString}} km<br>
                             Varav tjänsteresor: {{.TotalBusinessDistanceString}} km<br>
                             Varav privatresor: {{.TotalPrivateDistanceString}} km
+                            {{if .UnclassifiedDrivesRemaining }}<br>
+                            <font color="red">Oklassificerad sträcka: {{.UnclassifiedDistanceString}} km</font>
+                            {{end}}
                         </td>
 
                         <td align=right>
                             Total tid: {{.TotalDurationString}}<br>
                             Varav tjänsteresor: {{.TotalBusinessDurationString}}<br>
                             Varav privatresor: {{.TotalPrivateDurationString}}
+                            {{if .UnclassifiedDrivesRemaining }}<br>
+                            <font color="red">Oklassificerad tid: {{.UnclassifiedDurationString}} km</font>
+                            {{end}}
                         </td>
                     </tr>
                 </table>

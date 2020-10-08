@@ -181,6 +181,9 @@ type MainData struct {
     TotalDistanceString                 string
     TotalBusinessDistanceString         string
     TotalPrivateDistanceString          string
+    UnclassifiedDrivesRemaining         bool
+    UnclassifiedDurationString          string
+    UnclassifiedDistanceString          string
 }
 
 var db *sql.DB
@@ -630,8 +633,8 @@ func generateMain(year, month, carId, scrollPosition int) MainData {
     data.DropdownMonths = append(data.DropdownMonths, Month{12, "December"})
 
 
-    var totalDuration, totalBusinessDuration, totalPrivateDuration int
-    var totalDistance, totalBusinessDistance, totalPrivateDistance float32
+    var totalDuration, totalBusinessDuration, totalPrivateDuration, unclassifiedDuration int
+    var totalDistance, totalBusinessDistance, totalPrivateDistance, unclassifiedDistance float32
 
     for _, day := range data.Days {
         for _, drive := range day.Drives {
@@ -648,6 +651,9 @@ func generateMain(year, month, carId, scrollPosition int) MainData {
                     totalPrivateDuration += drive.Duration
                     totalPrivateDistance += drive.Distance
                 }
+            } else {
+                unclassifiedDuration += drive.Duration
+                unclassifiedDistance += drive.Distance
             }
         }
     }
@@ -663,6 +669,13 @@ func generateMain(year, month, carId, scrollPosition int) MainData {
     h, m = minutesToHoursAndMinutes(totalPrivateDuration)
     data.TotalPrivateDurationString = fmt.Sprintf("%d:%02d", h, m)
     data.TotalPrivateDistanceString = fmt.Sprintf("%.1f", totalPrivateDistance)
+
+    if unclassifiedDuration > 0 || unclassifiedDistance > 0 {
+        data.UnclassifiedDrivesRemaining = true
+        h, m = minutesToHoursAndMinutes(unclassifiedDuration)
+        data.UnclassifiedDurationString = fmt.Sprintf("%d:%02d", h, m)
+        data.UnclassifiedDistanceString = fmt.Sprintf("%.1f", unclassifiedDistance)
+    }
 
     return data
 }
