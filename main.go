@@ -450,75 +450,48 @@ func groupDrives(car int, drives []string) error {
 
     statement := fmt.Sprintf(`
     SELECT
-        start_date,
-        end_date,
-        duration_min,
-        distance,
-        COALESCE(start_geofence.name, CONCAT_WS(', ', COALESCE(start_address.name, nullif(CONCAT_WS(' ', start_address.road, start_address.house_number), '')), start_address.city)) AS start_address,
-        COALESCE(end_geofence.name, CONCAT_WS(', ', COALESCE(end_address.name, nullif(CONCAT_WS(' ', end_address.road, end_address.house_number), '')), end_address.city)) AS end_address,
-        classification
-    FROM drives
-        LEFT JOIN addresses start_address ON start_address_id = start_address.id
-        LEFT JOIN addresses end_address ON end_address_id = end_address.id
-        LEFT JOIN geofences start_geofence ON start_geofence_id = start_geofence.id
-        LEFT JOIN geofences end_geofence ON end_geofence_id = end_geofence.id
-        LEFT JOIN tj_classifications classification ON classification.drive_id = drives.id
-    WHERE car_id=%d AND drives.id=ANY('{`, car)
+    min(start_date) AS start_date,
+    max(end_date) AS end_date,
+    sum(duration_min) AS duration,
+    sum(distance) AS distance,
+    max(start_address) start_address,
+    max(end_address) end_address,
+    CASE count(distinct classification) WHEN 1 THEN
+        CASE count(classification)=count(*) WHEN true THEN min(classification) ELSE NULL END ELSE NULL END classification
+    FROM
+    (
+        SELECT
+            start_date,
+            end_date,
+            duration_min,
+            distance,
+            first_value(COALESCE(start_geofence.name, CONCAT_WS(', ', COALESCE(start_address.name, nullif(CONCAT_WS(' ', start_address.road, start_address.house_number), '')), start_address.city))) over (order by start_date asc) start_address,
+            first_value(COALESCE(end_geofence.name, CONCAT_WS(', ', COALESCE(end_address.name, nullif(CONCAT_WS(' ', end_address.road, end_address.house_number), '')), end_address.city))) over (order by end_date desc) end_address,
+            classification
+        FROM drives
+            LEFT JOIN addresses start_address ON start_address_id = start_address.id
+            LEFT JOIN addresses end_address ON end_address_id = end_address.id
+            LEFT JOIN geofences start_geofence ON start_geofence_id = start_geofence.id
+            LEFT JOIN geofences end_geofence ON end_geofence_id = end_geofence.id
+            LEFT JOIN tj_classifications classification ON classification.drive_id = drives.id
+        WHERE drives.car_id=%d AND drives.id=ANY('{`, car)
     for _, driveId := range drives {
         statement += driveId + ","
     }
     statement = strings.TrimRight(statement, ",")
     statement += `}')
-    ORDER BY drives.id ASC;`
+    ) c;`
 
-    rows, _ := db.Query(statement)
-    defer rows.Close()
-
-    endDate := time.Unix(0, 0)
-    startDate := time.Unix(1 << 48 - 1, 0)
-    duration := 0
+    var startDate, endDate time.Time
+    var duration int
     var distance float32
     var startAddress, endAddress string
     var classification sql.NullInt32
-    keepCheckingClassification := true
-    for rows.Next() {
-        var sd, ed time.Time
-        var dur int
-        var dist float32
-        var sa, ea string
-        var c sql.NullInt32
-        err := rows.Scan(&sd, &ed, &dur, &dist, &sa, &ea, &c)
-        if err != nil {
-            return err
-        }
 
-        duration += dur
-        distance += dist
-
-        if sd.Before(startDate) {
-            startDate = sd
-            startAddress = sa
-        }
-        if ed.After(endDate) {
-            endDate = ed
-            endAddress = ea
-        }
-
-        if keepCheckingClassification {
-            if !c.Valid {
-                classification.Valid = false
-                keepCheckingClassification = false
-            } else {
-                if !classification.Valid {
-                    classification = c
-                } else {
-                    if c.Int32 != classification.Int32 {
-                        classification.Valid = false
-                        keepCheckingClassification = false
-                    }
-                }
-            }
-        }
+    row := db.QueryRow(statement)
+    err := row.Scan(&startDate, &endDate, &duration, &distance, &startAddress, &endAddress, &classification)
+    if err != nil {
+        return err
     }
 
     statement = fmt.Sprintf(`
@@ -544,7 +517,7 @@ func groupDrives(car int, drives []string) error {
     }
     statement += ");"
 
-    _, err := db.Exec(statement)
+    _, err = db.Exec(statement)
     if err != nil {
         return err
     }
