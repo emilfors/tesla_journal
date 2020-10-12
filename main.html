@@ -364,19 +364,19 @@ function reloadPage() {
 }
 
 $(document).ready(function() {
-    $(".day").hover(
+    $("body").on("hover", ".day",
         function() {
         },
         function() {
         }
     );
 
-    $(".day").click(
+    $("body").on("click", ".day",
         function() {
         }
     );
 
-    $(".mastercb").click(
+    $("body").on("click", ".mastercb",
         function() {
             var checked = this.checked;
             $(this).parents(".day").find(":checkbox").not(this).each(
@@ -389,7 +389,7 @@ $(document).ready(function() {
         }
     );
 
-    $(".drivecb").click(
+    $("body").on("click", ".drivecb",
         function() {
             if (!this.checked) {
                 $(this).parents(".day").find(".mastercb").each(
@@ -416,6 +416,8 @@ $(document).ready(function() {
 
                 populateTotals(json.Totals);
                 populateDays(json.AffectedDays);
+
+                checkedDrivesChanged();
             },
             error: function (data) {
                 console.log('An error occurred.');
