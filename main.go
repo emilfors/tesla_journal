@@ -43,6 +43,8 @@ func main() {
     port := strconv.Itoa(config.Service.Port)
 
     r := mux.NewRouter()
+
+    r.PathPrefix("/js/").Handler(http.StripPrefix("/js/", http.FileServer(http.Dir("./js/"))))
     r.HandleFunc("/", serveGet).Methods(http.MethodGet)
     r.HandleFunc("/", servePost).Methods(http.MethodPost)
     r.HandleFunc("/action", postAction).Methods(http.MethodPost)
