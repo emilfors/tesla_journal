@@ -219,6 +219,24 @@ func groupDrives(car int, drives []string) error {
     return nil
 }
 
+func getFirstAndLastYears() (int, int, error) {
+    statement := `
+    SELECT
+        min(start_date) as min_date,
+        max(start_date) as max_date
+    FROM drives`
+
+    var first, last time.Time
+
+    row := db.QueryRow(statement)
+    err := row.Scan(&first, &last)
+    if err != nil {
+        return 0, 0, err
+    }
+
+    return first.Year(), last.Year(), nil
+}
+
 func generateMain(year, month, carId int) MainData {
     var data MainData
 
@@ -278,7 +296,16 @@ func generateMain(year, month, carId int) MainData {
     data.Days = days
 
     data.DropdownYears = make([]int, 0)
-    data.DropdownYears = append(data.DropdownYears, 2020)
+    firstYear, lastYear, err := getFirstAndLastYears()
+    if err != nil {
+        log.Println("Error retrieving year span")
+        firstYear = 2020
+        lastYear = 2020
+    }
+
+    for y := firstYear; y <= lastYear; y++ {
+        data.DropdownYears = append(data.DropdownYears, y)
+    }
 
     data.DropdownMonths = make([]Month, 0)
     data.DropdownMonths = append(data.DropdownMonths, Month{1, "Januari"})
