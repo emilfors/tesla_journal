@@ -37,7 +37,7 @@ func main() {
         fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
         os.Exit(1)
     }
-    defer db.Close()
+    defer database.Close()
 
     // start serving requests:
     port := strconv.Itoa(config.Service.Port)

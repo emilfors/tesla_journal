@@ -11,7 +11,7 @@ import (
     "database/sql"
 )
 
-var db *sql.DB
+var database *sql.DB
 var config Config
 
 func connectDB(conf Config) error {
@@ -20,13 +20,13 @@ func connectDB(conf Config) error {
     conn := config.Connection
 
     psqlInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", conn.Host, conn.Port, conn.User, conn.Password, conn.DB)
-    db, err = sql.Open("postgres", psqlInfo)
+    database, err = sql.Open("postgres", psqlInfo)
     if err != nil {
         return err
     }
 
     // sql.Open doesn't actually open the database; ping it for that to happen:
-    err = db.Ping()
+    err = database.Ping()
     if err != nil {
         return err
     }
@@ -39,6 +39,18 @@ func connectDB(conf Config) error {
     }
 
     return nil
+}
+
+func db() *sql.DB {
+    err := database.Ping()
+    if err != nil {
+        err = connectDB(config)
+        if err != nil {
+            panic(err)
+        }
+    }
+
+    return database
 }
 
 func changeClassification(classification int, drives []string, groupedDrives []string) error {
@@ -60,7 +72,7 @@ func changeClassification(classification int, drives []string, groupedDrives []s
     statement = strings.TrimRight(statement, ",")
     statement += " ON CONFLICT(drive_id) DO UPDATE SET classification = excluded.classification;"
 
-    _, err = db.Exec(statement)
+    _, err = db().Exec(statement)
     if err != nil {
         return err
     }
@@ -76,7 +88,7 @@ func changeClassification(classification int, drives []string, groupedDrives []s
         statement = strings.TrimRight(statement, ",")
         statement += `}');`
 
-        _, err = db.Exec(statement)
+        _, err = db().Exec(statement)
         if err != nil {
             return err
         }
@@ -98,7 +110,7 @@ func getDriveIdsForGroups(groupedDrives []string) ([]string, error) {
     statement = strings.TrimRight(statement, ",")
     statement += `}');`
 
-    rows, _ := db.Query(statement)
+    rows, _ := db().Query(statement)
     defer rows.Close()
 
     for rows.Next() {
@@ -129,7 +141,7 @@ func ungroupDrives(car int, groupedDrives []string) error {
     statement = strings.TrimRight(statement, ",")
     statement += "}');"
 
-    _, err := db.Exec(statement)
+    _, err := db().Exec(statement)
     if err != nil {
         return err
     }
@@ -182,7 +194,7 @@ func groupDrives(car int, drives []string) error {
     var startAddress, endAddress string
     var classification sql.NullInt32
 
-    row := db.QueryRow(statement)
+    row := db().QueryRow(statement)
     err := row.Scan(&startDate, &endDate, &duration, &distance, &startAddress, &endAddress, &classification)
     if err != nil {
         return err
@@ -211,7 +223,7 @@ func groupDrives(car int, drives []string) error {
     }
     statement += ");"
 
-    _, err = db.Exec(statement)
+    _, err = db().Exec(statement)
     if err != nil {
         return err
     }
@@ -228,7 +240,7 @@ func getFirstAndLastYears() (int, int, error) {
 
     var first, last time.Time
 
-    row := db.QueryRow(statement)
+    row := db().QueryRow(statement)
     err := row.Scan(&first, &last)
     if err != nil {
         return 0, 0, err
@@ -413,7 +425,7 @@ func getAffectedDaysFromDB(year, month, car int, driveIds []string, groupedDrive
         statement = strings.TrimRight(statement, ",")
         statement += `}')`
 
-        rows, _ := db.Query(statement)
+        rows, _ := db().Query(statement)
         defer rows.Close()
 
         for rows.Next() {
@@ -439,7 +451,7 @@ func getAffectedDaysFromDB(year, month, car int, driveIds []string, groupedDrive
         statement = strings.TrimRight(statement, ",")
         statement += `}')`
 
-        rows, _ := db.Query(statement)
+        rows, _ := db().Query(statement)
         defer rows.Close()
 
         for rows.Next() {
@@ -530,7 +542,7 @@ func getDrives(carId int, from, to time.Time) ([]Drive, error) {
 
     var drives []Drive
 
-    rows, _ := db.Query(statement)
+    rows, _ := db().Query(statement)
     defer rows.Close()
 
     for rows.Next() {
@@ -577,7 +589,7 @@ func getGroupedDrives(carId int, from, to time.Time) (map[time.Time][]GroupedDri
     WHERE car_id = %d AND start_date >= '%s'::date AND start_date < '%s'::date
     `, carId, from.Format("2006-01-02 15:04:05.000"), to.Format("2006-01-02 15:04:05.000"))
 
-    rows, _ := db.Query(statement)
+    rows, _ := db().Query(statement)
     defer rows.Close()
 
     for rows.Next() {
@@ -626,7 +638,7 @@ func getCars() ([]Car, error) {
 
     statement := "SELECT id, model, name FROM cars ORDER BY id ASC;"
 
-    rows, _ := db.Query(statement)
+    rows, _ := db().Query(statement)
     defer rows.Close()
 
     for rows.Next() {
@@ -666,7 +678,7 @@ func getTotals(year, month, carId int) (Totals, error) {
 
     var t Totals
 
-    row := db.QueryRow(statement)
+    row := db().QueryRow(statement)
     err := row.Scan(&t.TotalBusinessDuration, &t.TotalBusinessDistance, &t.TotalPrivateDuration, &t.TotalPrivateDistance, &t.TotalDuration, &t.TotalDistance, &t.UnclassifiedDuration, &t.UnclassifiedDistance)
     if err != nil {
         return t, err
@@ -685,7 +697,7 @@ func createTables() error {
     ALTER TABLE public.tj_classifications
     OWNER to %s;`, config.Connection.User)
 
-    _, err := db.Exec(statement)
+    _, err := db().Exec(statement)
     if err != nil {
         return err
     }
@@ -709,7 +721,7 @@ func createTables() error {
     ALTER TABLE public.tj_grouped_drives
     OWNER to %s;`, config.Connection.User)
 
-    _, err = db.Exec(statement)
+    _, err = db().Exec(statement)
     if err != nil {
         return err
     }
