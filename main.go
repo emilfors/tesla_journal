@@ -147,9 +147,23 @@ func servePost(w http.ResponseWriter, r *http.Request) {
         log.Println("Error retrieving affected days")
     }
 
+    totals, err := getTotals(year, month, car)
+    if err != nil {
+        log.Println("Error retrieving totals")
+    }
+
+    var response PostResponse
+    response.Totals = totals
+    response.AffectedDays = affectedDays
+
     w.WriteHeader(http.StatusOK)
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(affectedDays)
+    json.NewEncoder(w).Encode(response)
+}
+
+type PostResponse struct {
+    Totals          Totals
+    AffectedDays    []Day
 }
 
 func getDay(w http.ResponseWriter, r *http.Request) {

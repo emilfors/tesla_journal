@@ -616,6 +616,38 @@ func getCars() ([]Car, error) {
     return cars, rows.Err()
 }
 
+func getTotals(year, month, carId int) (Totals, error) {
+    from := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+    to := from.AddDate(0, 1, 0)
+
+    statement := fmt.Sprintf(`
+    SELECT
+        *,
+        duration_total - (duration_business + duration_private) as duration_unknown,
+        distance_total - (distance_business + distance_private) as distance_unknown
+    FROM
+        (SELECT
+            sum(case when c.classification=1 then drives.duration_min else 0 end) as duration_business,
+            sum(case when c.classification=1 then drives.distance else 0 end) as distance_business,
+            sum(case when c.classification=2 then drives.duration_min else 0 end) as duration_private,
+            sum(case when c.classification=2 then drives.distance else 0 end) as distance_private,
+            sum(drives.duration_min) as duration_total,
+            sum(drives.distance) as distance_total
+        FROM drives
+        LEFT JOIN tj_classifications c ON c.drive_id=drives.id
+    WHERE drives.car_id=%d AND drives.start_date >= '%s'::date AND drives.start_date < '%s'::date) a`, carId, from.Format("2006-01-02 15:04:05.000"), to.Format("2006-01-02 15:04:05.000"))
+
+    var t Totals
+
+    row := db.QueryRow(statement)
+    err := row.Scan(&t.TotalBusinessDuration, &t.TotalBusinessDistance, &t.TotalPrivateDuration, &t.TotalPrivateDistance, &t.TotalDuration, &t.TotalDistance, &t.UnclassifiedDuration, &t.UnclassifiedDistance)
+    if err != nil {
+        return t, err
+    }
+
+    return t, nil
+}
+
 func createTables() error {
     statement := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS public.tj_classifications
     (

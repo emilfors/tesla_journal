@@ -45,6 +45,10 @@ body {
     font-weight: bold;
 }
 
+.totals {
+    font-size: 12pt;
+}
+
 .weekend {
     background-color: #fffafa;
 }
@@ -65,7 +69,7 @@ body {
     background-color: white;
     color: black;
     padding: 10px 28px;
-    font-size: 14px;
+    font-size: 12pt;
     cursor: pointer;
     width: 150px;
 }
@@ -179,20 +183,24 @@ body {
                         </td>
 
                         <td align=right>
+                            <span id="totaldistances" class="totals">
                             Total körsträcka: {{.TotalDistanceString}} km<br>
                             Varav tjänsteresor: {{.TotalBusinessDistanceString}} km<br>
                             Varav privatresor: {{.TotalPrivateDistanceString}} km
                             {{if .UnclassifiedDrivesRemaining }}<br>
                             <font color="red">Oklassificerad sträcka: {{.UnclassifiedDistanceString}} km</font>
+                            </span>
                             {{end}}
                         </td>
 
                         <td align=right>
+                            <span id="totaldurations" class="totals">
                             Total tid: {{.TotalDurationString}}<br>
                             Varav tjänsteresor: {{.TotalBusinessDurationString}}<br>
                             Varav privatresor: {{.TotalPrivateDurationString}}
                             {{if .UnclassifiedDrivesRemaining }}<br>
-                            <font color="red">Oklassificerad tid: {{.UnclassifiedDurationString}} km</font>
+                            <font color="red">Oklassificerad tid: {{.UnclassifiedDurationString}}</font>
+                            </span>
                             {{end}}
                         </td>
                     </tr>
@@ -404,7 +412,10 @@ $(document).ready(function() {
             url: frm.attr("action"),
             data: frm.serialize(),
             success: function (data) {
-                populateDays(JSON.parse(data));
+                var json = JSON.parse(data);
+
+                populateTotals(json.Totals);
+                populateDays(json.AffectedDays);
             },
             error: function (data) {
                 console.log('An error occurred.');
@@ -457,6 +468,40 @@ $(document).ready(function() {
             $("#dayform").submit();
         }
     );
+
+    function populateTotals(totals) {
+        var html = "";
+        html += "Total körsträcka: " + totals.TotalDistance.toFixed(1) + " km<br>";
+        html += "Varav tjänsteresor: " + totals.TotalBusinessDistance.toFixed(1) + " km<br>";
+        html += "Varav privatresor: " + totals.TotalPrivateDistance.toFixed(1) + " km";
+        if (totals.UnclassifiedDistance > 0) {
+            html += "<br><font color='red'>Oklassificerad sträcka: " + totals.UnclassifiedDistance.toFixed(1) + " km</font>";
+        }
+
+        $("#totaldistances").html(html);
+
+        html = "";
+        html += "Total tid: " + tohhmm(totals.TotalDuration) + "<br>";
+        html += "Varav tjänsteresor: " + tohhmm(totals.TotalBusinessDuration) + "<br>";
+        html += "Varav privatresor: " + tohhmm(totals.TotalPrivateDuration);
+        if (totals.UnclassifiedDuration > 0) {
+            html += "<br><font color='red'>Oklassificerad tid: " + tohhmm(totals.UnclassifiedDuration) + "</font>";
+        }
+
+        $("#totaldurations").html(html);
+    }
+
+    function tohhmm(minutes) {
+        var mm = minutes;
+        var hh = 0;
+
+        while (mm >= 60) {
+            hh += 1;
+            mm -= 60;
+        }
+
+        return hh + ":" + (mm).toLocaleString(undefined, {minimumIntegerDigits: 2});
+    }
 
     function populateDays(days) {
         $.each(days,

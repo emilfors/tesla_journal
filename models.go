@@ -115,6 +115,17 @@ type Month struct {
     Name                                string
 }
 
+type Totals struct {
+    TotalDuration                       int
+    TotalBusinessDuration               int
+    TotalPrivateDuration                int
+    TotalDistance                       float32
+    TotalBusinessDistance               float32
+    TotalPrivateDistance                float32
+    UnclassifiedDuration                int
+    UnclassifiedDistance                float32
+}
+
 type MainData struct {
     Year                                int
     Month                               int
