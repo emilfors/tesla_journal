@@ -45,6 +45,7 @@ func main() {
     r := mux.NewRouter()
     r.HandleFunc("/", serveGet).Methods(http.MethodGet)
     r.HandleFunc("/", servePost).Methods(http.MethodPost)
+    r.HandleFunc("/action", postAction).Methods(http.MethodPost)
     r.HandleFunc("/day/{year}/{month}/{day}/{car}", getDay).Methods(http.MethodGet)
 
     secure := config.Service.CertFile != "" && config.Service.KeyFile != ""
@@ -117,6 +118,28 @@ func servePost(w http.ResponseWriter, r *http.Request) {
     getIntParamPost(r, "month", &month)
     getIntParamPost(r, "car", &car)
 
+    data := generateMain(year, month, car)
+
+    err = mainTemplate.Execute(w, data)
+    if (err != nil) {
+        log.Fatal("Error while executing template: " + err.Error())
+    }
+}
+
+func postAction(w http.ResponseWriter, r *http.Request) {
+    year := int(time.Now().Year())
+    month := int(time.Now().Month())
+    car := 1
+
+    err := r.ParseForm()
+    if err != nil {
+        panic(err)
+    }
+
+    getIntParamPost(r, "year", &year)
+    getIntParamPost(r, "month", &month)
+    getIntParamPost(r, "car", &car)
+
     action := r.Form.Get("action")
     if action == "classify" {
         err = changeClassification(getClassificationId(r.Form.Get("classification")), r.Form["drive"], r.Form["groupeddrive"])
@@ -134,13 +157,6 @@ func servePost(w http.ResponseWriter, r *http.Request) {
             log.Println("Error ungrouping drives")
         }
     }
-
-    //data := generateMain(year, month, car)
-
-    //err = mainTemplate.Execute(w, data)
-    //if (err != nil) {
-        //log.Fatal("Error while executing template: " + err.Error())
-    //}
 
     affectedDays, err := getAffectedDaysFromDB(year, month, car, r.Form["drive"], r.Form["groupeddrive"])
     if err != nil {
