@@ -48,7 +48,6 @@ func main() {
     r.HandleFunc("/", serveGet).Methods(http.MethodGet)
     r.HandleFunc("/", servePost).Methods(http.MethodPost)
     r.HandleFunc("/action", postAction).Methods(http.MethodPost)
-    r.HandleFunc("/day/{year}/{month}/{day}/{car}", getDay).Methods(http.MethodGet)
 
     secure := config.Service.CertFile != "" && config.Service.KeyFile != ""
     if secure {
@@ -142,27 +141,34 @@ func postAction(w http.ResponseWriter, r *http.Request) {
     getIntParamPost(r, "month", &month)
     getIntParamPost(r, "car", &car)
 
+    var from, to *time.Time
+
     action := r.Form.Get("action")
     if action == "classify" {
-        err = changeClassification(getClassificationId(r.Form.Get("classification")), r.Form["drive"], r.Form["groupeddrive"])
+        from, to, err = changeClassification(getClassificationId(r.Form.Get("classification")), r.Form["drive"], r.Form["groupeddrive"])
         if err != nil {
             log.Println("Error changing drive classification")
         }
     } else if action == "group" {
-        err = groupDrives(car, r.Form["drive"])
+        from, to, err = groupDrives(car, r.Form["drive"])
         if err != nil {
             log.Println("Error grouping drives")
         }
     } else if action == "ungroup" {
-        err = ungroupDrives(car, r.Form["groupeddrive"])
+        from, to, err = ungroupDrives(car, r.Form["groupeddrive"])
         if err != nil {
             log.Println("Error ungrouping drives")
         }
     }
 
-    affectedDays, err := getAffectedDaysFromDB(year, month, car, r.Form["drive"], r.Form["groupeddrive"])
-    if err != nil {
-        log.Println("Error retrieving affected days")
+    var affectedDays []Day
+    if from != nil && to != nil {
+        affectedDays, err = getDays(*from, *to, car)
+        if err != nil {
+            log.Println("Error retrieving affected days")
+        }
+    } else {
+        log.Println("The action did not return a useful date range")
     }
 
     totals, err := getTotals(year, month, car)
@@ -182,43 +188,5 @@ func postAction(w http.ResponseWriter, r *http.Request) {
 type PostResponse struct {
     Totals          Totals
     AffectedDays    []Day
-}
-
-func getDay(w http.ResponseWriter, r *http.Request) {
-    vars := mux.Vars(r)
-
-    y, err := strconv.Atoi(vars["year"])
-    if err != nil {
-        w.WriteHeader(http.StatusBadRequest)
-        return
-    }
-
-    m, err := strconv.Atoi(vars["month"])
-    if err != nil {
-        w.WriteHeader(http.StatusBadRequest)
-        return
-    }
-
-    d, err := strconv.Atoi(vars["day"])
-    if err != nil {
-        w.WriteHeader(http.StatusBadRequest)
-        return
-    }
-
-    c, err := strconv.Atoi(vars["car"])
-    if err != nil {
-        w.WriteHeader(http.StatusBadRequest)
-        return
-    }
-
-    day, err := getDayFromDB(y, m, d, c)
-    if err != nil {
-        w.WriteHeader(http.StatusNotFound)
-        return
-    }
-
-    w.WriteHeader(http.StatusOK)
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(day)
 }
 

@@ -9,6 +9,7 @@ import (
     "github.com/lib/pq"
     "github.com/goodsign/monday"
     "database/sql"
+    "sort"
 )
 
 var database *sql.DB
@@ -53,14 +54,14 @@ func db() *sql.DB {
     return database
 }
 
-func changeClassification(classification int, drives []string, groupedDrives []string) error {
+func changeClassification(classification int, drives []string, groupedDrives []string) (*time.Time, *time.Time, error) {
     if (len(drives) + len(groupedDrives)) == 0 {
-        return errors.New("Attempt to classify drives failed; no drive ids or grouped drive ids specified")
+        return nil, nil, errors.New("Attempt to classify drives failed; no drive ids or grouped drive ids specified")
     }
 
     groupedDriveIds, err := getDriveIdsForGroups(groupedDrives)
     if err != nil {
-        return err
+        return nil, nil, err
     }
 
     ids := append(drives, groupedDriveIds...)
@@ -74,7 +75,7 @@ func changeClassification(classification int, drives []string, groupedDrives []s
 
     _, err = db().Exec(statement)
     if err != nil {
-        return err
+        return nil, nil, err
     }
 
     if len(groupedDrives) != 0 {
@@ -90,11 +91,11 @@ func changeClassification(classification int, drives []string, groupedDrives []s
 
         _, err = db().Exec(statement)
         if err != nil {
-            return err
+            return nil, nil, err
         }
     }
 
-    return nil
+    return getAffectedDates(drives, groupedDrives)
 }
 
 func getDriveIdsForGroups(groupedDrives []string) ([]string, error) {
@@ -127,10 +128,12 @@ func getDriveIdsForGroups(groupedDrives []string) ([]string, error) {
     return groupedDriveIds, rows.Err()
 }
 
-func ungroupDrives(car int, groupedDrives []string) error {
+func ungroupDrives(car int, groupedDrives []string) (*time.Time, *time.Time, error) {
     if len(groupedDrives) == 0 {
-        return errors.New("Attempt to ungroup drives failed; no group drive ids specified")
+        return nil, nil, errors.New("Attempt to ungroup drives failed; no group drive ids specified")
     }
+
+    from, to, _ := getAffectedDates([]string{}, groupedDrives)
 
     statement := `
     DELETE FROM tj_grouped_drives
@@ -143,15 +146,15 @@ func ungroupDrives(car int, groupedDrives []string) error {
 
     _, err := db().Exec(statement)
     if err != nil {
-        return err
+        return nil, nil, err
     }
 
-    return nil
+    return from, to, err
 }
 
-func groupDrives(car int, drives []string) error {
+func groupDrives(car int, drives []string) (*time.Time, *time.Time, error) {
     if len(drives) == 0 {
-        return errors.New("Attempt to group drives failed; no drive ids specified")
+        return nil, nil, errors.New("Attempt to group drives failed; no drive ids specified")
     }
 
     statement := fmt.Sprintf(`
@@ -197,7 +200,7 @@ func groupDrives(car int, drives []string) error {
     row := db().QueryRow(statement)
     err := row.Scan(&startDate, &endDate, &duration, &distance, &startAddress, &endAddress, &classification)
     if err != nil {
-        return err
+        return nil, nil, err
     }
 
     statement = fmt.Sprintf(`
@@ -225,10 +228,10 @@ func groupDrives(car int, drives []string) error {
 
     _, err = db().Exec(statement)
     if err != nil {
-        return err
+        return nil, nil, err
     }
 
-    return nil
+    return getAffectedDates(drives, []string{})
 }
 
 func getFirstAndLastYears() (int, int, error) {
@@ -238,15 +241,15 @@ func getFirstAndLastYears() (int, int, error) {
         max(start_date) as max_date
     FROM drives`
 
-    var first, last time.Time
+    var minDate, maxDate time.Time
 
     row := db().QueryRow(statement)
-    err := row.Scan(&first, &last)
+    err := row.Scan(&minDate, &maxDate)
     if err != nil {
         return 0, 0, err
     }
 
-    return first.Year(), last.Year(), nil
+    return minDate.Year(), maxDate.Year(), nil
 }
 
 func generateMain(year, month, carId int) MainData {
@@ -381,7 +384,7 @@ func generateMain(year, month, carId int) MainData {
     return data
 }
 
-func getDayFromDB(year, month, day, carId int) (Day, error) {
+func getDay(year, month, day, carId int) (Day, error) {
     var d Day
 
     from := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
@@ -411,12 +414,59 @@ func getDayFromDB(year, month, day, carId int) (Day, error) {
     return d, nil
 }
 
-func getAffectedDaysFromDB(year, month, car int, driveIds []string, groupedDriveIds []string) ([]Day, error) {
-    var dates []int
+func getDays(from, to time.Time, carId int) ([]Day, error) {
+    drives, err := getDrives(carId, from, to)
+    if err != nil {
+        log.Println("Error retrieving drives from database: " + err.Error())
+    }
+
+    groupedDrives, err := getGroupedDrives(carId, from, to)
+    if err != nil {
+        log.Println("Error retrieving grouped drives from database: " + err.Error())
+    }
+
+    var days []Day
+    var day *Day = nil
+    current := -1
+    for _, drive := range drives {
+        d := drive.StartDate.Day()
+        if d != current {
+            if day != nil {
+                days = append(days, *day)
+            }
+
+            day = new(Day)
+            day.Date = stripTime(drive.StartDate)
+
+            if gd, exists := groupedDrives[day.Date]; exists {
+                day.GroupedDrives = gd
+            }
+
+            t := convertTime(day.Date)
+            day.DateString = strings.ToUpper(monday.Format(t, "Monday 2 January", monday.LocaleSvSE))
+            day.DateAsTs = day.Date.Unix()
+
+            current = d
+        }
+
+        day.Drives = append(day.Drives, drive)
+    }
+
+    if day != nil {
+        days = append(days, *day)
+    }
+
+    return days, nil
+}
+
+func getAffectedDates(driveIds []string, groupedDriveIds []string) (*time.Time, *time.Time, error) {
+    var dates []time.Time
 
     if len(driveIds) > 0 {
         statement := `
-        SELECT start_date
+        SELECT
+            min(start_date) as min_date,
+            max(end_date) as max_date
         FROM drives
         WHERE id = ANY('{`
         for _, id := range driveIds {
@@ -425,24 +475,21 @@ func getAffectedDaysFromDB(year, month, car int, driveIds []string, groupedDrive
         statement = strings.TrimRight(statement, ",")
         statement += `}')`
 
-        rows, _ := db().Query(statement)
-        defer rows.Close()
+        var minD, maxD time.Time
 
-        for rows.Next() {
-            var sd time.Time
-
-            err := rows.Scan(&sd)
-            if err != nil {
-                return nil, err
-            }
-
-            dates = append(dates, sd.Day())
+        row := db().QueryRow(statement)
+        err := row.Scan(&minD, &maxD)
+        if err == nil {
+            dates = append(dates, minD)
+            dates = append(dates, maxD)
         }
     }
 
     if len(groupedDriveIds) > 0 {
         statement := `
-        SELECT start_date
+        SELECT
+            min(start_date) as min_date,
+            max(end_date) as max_date
         FROM tj_grouped_drives
         WHERE id = ANY('{`
         for _, id := range groupedDriveIds {
@@ -451,43 +498,25 @@ func getAffectedDaysFromDB(year, month, car int, driveIds []string, groupedDrive
         statement = strings.TrimRight(statement, ",")
         statement += `}')`
 
-        rows, _ := db().Query(statement)
-        defer rows.Close()
+        var minD, maxD time.Time
 
-        for rows.Next() {
-            var sd time.Time
-
-            err := rows.Scan(&sd)
-            if err != nil {
-                return nil, err
-            }
-
-            dates = append(dates, sd.Day())
+        row := db().QueryRow(statement)
+        err := row.Scan(&minD, &maxD)
+        if err == nil {
+            dates = append(dates, minD)
+            dates = append(dates, maxD)
         }
     }
 
-    // remove duplicates:
-    keys := make(map[int]bool)
-    list := []int{}
-    for _, entry := range dates {
-        if _, value := keys[entry]; !value {
-            keys[entry] = true
-            list = append(list, entry)
-        }
+    if len(dates) < 2 {
+        return nil, nil, errors.New("Error retrieving first/last dates of range of drives")
     }
 
-    var days []Day
+    sort.Slice(dates, func(i, j int) bool { return dates[i].Before(dates[j]) })
+    minDate := stripTime(dates[0])
+    maxDate := stripTime(dates[len(dates) - 1]).AddDate(0, 0, 1)
 
-    for _, d := range list {
-        day, err := getDayFromDB(year, month, d, car)
-        if err != nil {
-            log.Println("Error getting day from database")
-        } else {
-            days = append(days, day)
-        }
-    }
-
-    return days, nil
+    return &minDate, &maxDate, nil
 }
 
 func getDrives(carId int, from, to time.Time) ([]Drive, error) {
