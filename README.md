@@ -16,6 +16,7 @@ go build
 ```
 
 Installation:
+
 Edit the configuration file `tesla_journal.cfg`. Set the parameters to suitable values for your system. If you run Tesla Journal
 on the same host as Teslamate and haven't changed the default database connection values, it should be enough to set the Password
 parameter to your PostgreSQL password.
