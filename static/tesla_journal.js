@@ -206,36 +206,46 @@ $(document).ready(function() {
     function makeDriveHTML(drive, groupID = -1) {
         var html = "";
 
+        var endpoint = "details/";
+
         html += "<tr>";
         html += "<td align=left valign=center width=25>";
         if (groupID != -1) {
+            endpoint = "group" + endpoint + groupID;
             html += "<input type='checkbox' class='drivecb groupedcb' name='groupeddrive' value='" + groupID + "'/>";
         } else {
+            endpoint = endpoint + drive.Id;
             html += "    <input type='checkbox' class='drivecb' name='drive' value='" + drive.Id + "'/>";
         }
         html += "</td>";
 
         html += "<td align=center valign=center width=25>";
         if (groupID != -1) {
+            html += "<a href='" + endpoint + "'>";
             html += "<svg width='24' height='30'>";
             html += "<use x='0' y='0' xlink:href='#merge'/>";
             html += "</svg>";
+            html += "</a>";
         } else {
             html += "    &nbsp;";
         }
         html += "</td>";
 
         html += "<td align=left width=250>";
-        html += "    <span lang=sv style='font-size: 10.0pt; font-family:Calibri;language:sv'>";
+        html += "    <span lang=sv style='font-size: 10.0pt; font-family:Calibri;'>";
+        html += "    <a href='" + endpoint + "'>";
         html += "    " + drive.EndAddress + "<br>";
         html += "    " + drive.StartAddress;
+        html += "    </a>";
         html += "    </span>";
         html += "</td>";
 
         html += "<td align=right width=50>";
-        html += "    <span lang=sv style='font-size: 10.0pt;font-family:Calibri;language:sv'>";
+        html += "    <span lang=sv style='font-size: 10.0pt;font-family:Calibri;'>";
+        html += "    <a href='" + endpoint + "'>";
         html += "    " + drive.EndTime + "<br>";
         html += "    " + drive.StartTime;
+        html += "    </a>";
         html += "    </span>";
         html += "</td>";
 
@@ -244,14 +254,16 @@ $(document).ready(function() {
         html += "</td>";
 
         html += "<td align=left width=250>";
-        html += "    <span lang=sv style='font-size: 10.0pt;font-family:Calibri;language:sv'>";
+        html += "    <span lang=sv style='font-size: 10.0pt;font-family:Calibri;'>";
+        html += "    <a href='" + endpoint + "'>";
         html += "    Körsträcka: " + drive.DistanceString + " km<br>";
         html += "    Tid: " + drive.DurationString;
+        html += "    </a>";
         html += "    </span>";
         html += "</td>";
 
         html += "<td class=" + drive.ClassificationClass + " align=right width=150>";
-        html += "    " + drive.ClassificationString;
+        html += "    <a class=" + drive.ClassificationClass + " href='" + endpoint + "'>" + drive.ClassificationString + "</a>";
         html += "</td>";
         html += "</tr>";
 
@@ -274,4 +286,32 @@ $(document).ready(function() {
         return null;
     }
 
+    function makeMap() {
+        var mymap = L.map('map').setView([51.505, -0.09], 13);
+
+        var feature = {
+            "type": "Feature",
+            "properties": {
+                "style": {
+                    "color": "#004070",
+                    "weight": 4,
+                    "opacity": 1
+                }
+            },
+            "geometry": {
+                "type": "MultiPoint",
+                "coordinates": [
+                    [0.25, 51.47],
+                    [0.26, 51.47],
+                    [0.27, 51.47]
+                ]
+            }
+        };
+        var geojsonLayer = new L.GeoJSON(feature);
+        map.addLayer(geojsonLayer).fitBounds(geojsonLayer.getBounds());
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+    }
 });

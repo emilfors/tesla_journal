@@ -138,22 +138,28 @@
                                         </td>
 
                                         <td align=center valign=center width=25>
+                                            <a href='groupdetails/{{$currentGroupId}}'>
                                             <svg width="24" height="30">
                                                 <use x="0" y="0" xlink:href="#merge"/>
                                             </svg>
+                                            </a>
                                         </td>
 
                                         <td align=left width=250>
-                                            <span lang=sv style='font-size: 10.0pt; font-family:Calibri;language:sv'>
+                                            <span lang=sv style='font-size: 10.0pt; font-family:Calibri;'>
+                                                <a href='groupdetails/{{$currentGroupId}}'>
                                                 {{$gd.EndAddress}}<br>
                                                 {{$gd.StartAddress}}
+                                                </a>
                                             </span>
                                         </td>
 
                                         <td align=right width=50>
-                                            <span lang=sv style='font-size: 10.0pt;font-family:Calibri;language:sv'>
+                                            <span lang=sv style='font-size: 10.0pt;font-family:Calibri;'>
+                                                <a href='groupdetails/{{$currentGroupId}}'>
                                                 {{$gd.EndTime}}
                                                 {{$gd.StartTime}}
+                                                </a>
                                             </span>
                                         </td>
 
@@ -162,14 +168,16 @@
                                         </td>
 
                                         <td align=left width=250>
-                                            <span lang=sv style='font-size: 10.0pt;font-family:Calibri;language:sv'>
+                                            <span lang=sv style='font-size: 10.0pt;font-family:Calibri;'>
+                                                <a href='groupdetails/{{$currentGroupId}}'>
                                                 Körsträcka: {{$gd.DistanceString}} km<br>
                                                 Tid: {{$gd.DurationString}}
+                                                </a>
                                             </span>
                                         </td>
 
                                         <td class={{.ClassificationClass}} align=right width=150>
-                                            {{$gd.ClassificationString}}
+                                            <a class={{.ClassificationClass}} href='groupdetails/{{$currentGroupId}}'>{{$gd.ClassificationString}}</a>
                                         </td>
                                     </tr>
 
@@ -191,16 +199,20 @@
                                         </td>
 
                                         <td align=left width=250>
-                                            <span lang=sv style='font-size: 10.0pt; font-family:Calibri;language:sv'>
+                                            <span lang=sv style='font-size: 10.0pt; font-family:Calibri;'>
+                                                <a href="details/{{.Id}}">
                                                 {{.EndAddress}}<br>
                                                 {{.StartAddress}}
+                                                </a>
                                             </span>
                                         </td>
 
                                         <td align=right width=50>
-                                            <span lang=sv style='font-size: 10.0pt;font-family:Calibri;language:sv'>
+                                            <span lang=sv style='font-size: 10.0pt;font-family:Calibri;'>
+                                                <a href="details/{{.Id}}">
                                                 {{.EndTime}}<br>
                                                 {{.StartTime}}
+                                                </a>
                                             </span>
                                         </td>
 
@@ -209,14 +221,18 @@
                                         </td>
 
                                         <td align=left width=250>
-                                            <span lang=sv style='font-size: 10.0pt;font-family:Calibri;language:sv'>
+                                            <span lang=sv style='font-size: 10.0pt;font-family:Calibri;'>
+                                                <a href="details/{{.Id}}">
                                                 Körsträcka: {{.DistanceString}} km<br>
                                                 Tid: {{.DurationString}}
+                                                </a>
                                             </span>
                                         </td>
 
                                         <td class={{.ClassificationClass}} align=right width=150>
+                                            <a class={{.ClassificationClass}} href="details/{{.Id}}">
                                             {{.ClassificationString}}
+                                            </a>
                                         </td>
                                     </tr>
 
