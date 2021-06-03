@@ -16,6 +16,10 @@ go build
 ```
 
 Installation:
+<<<<<<< HEAD
+=======
+
+>>>>>>> fe33f2806788a26ca5d76545edf6b19c7ede9d29
 Edit the configuration file `tesla_journal.cfg`. Set the parameters to suitable values for your system. If you run Tesla Journal
 on the same host as Teslamate and haven't changed the default database connection values, it should be enough to set the Password
 parameter to your PostgreSQL password.
@@ -24,6 +28,10 @@ If you wish to secure (https) connections to Tesla Journal you can generate a se
 `KeyFile` in the configuration file to point out your certificate files. If those parameters are omitted, the service will accept
 unsecured (http) connections only.
 
+<<<<<<< HEAD
+=======
+Example configuration:
+>>>>>>> fe33f2806788a26ca5d76545edf6b19c7ede9d29
 ```cfg
 [Connection]
 Host = "localhost"
@@ -66,7 +74,11 @@ Automatically start the service on boot:
 sudo systemctl enable tesla_journal
 ```
 
+<<<<<<< HEAD
 ## Usa Tesla Journal
+=======
+## Use Tesla Journal
+>>>>>>> fe33f2806788a26ca5d76545edf6b19c7ede9d29
 
 Connect to the service using a web browser. Use the drop-down selection boxes for picking the car and month you want to work with.
 The page will display a list of the days in the month you selected, each day listing the drives you did that day.
