@@ -175,8 +175,8 @@ func groupDrives(car int, drives []string) (*time.Time, *time.Time, error) {
             end_date,
             duration_min,
             distance,
-            first_value(COALESCE(start_geofence.name, CONCAT_WS(', ', COALESCE(start_address.name, nullif(CONCAT_WS(' ', start_address.road, start_address.house_number), '')), start_address.city))) over (order by start_date asc) start_address,
-            first_value(COALESCE(end_geofence.name, CONCAT_WS(', ', COALESCE(end_address.name, nullif(CONCAT_WS(' ', end_address.road, end_address.house_number), '')), end_address.city))) over (order by end_date desc) end_address,
+            first_value(COALESCE(start_geofence.name, CONCAT_WS(', ', COALESCE(COALESCE(start_address.name, ''), nullif(CONCAT_WS(' ', start_address.road, start_address.house_number), '')), start_address.city))) over (order by start_date asc) start_address,
+            first_value(COALESCE(end_geofence.name, CONCAT_WS(', ', COALESCE(COALESCE(end_address.name, ''), nullif(CONCAT_WS(' ', end_address.road, end_address.house_number), '')), end_address.city))) over (order by end_date desc) end_address,
             classification
         FROM drives
             LEFT JOIN addresses start_address ON start_address_id = start_address.id
@@ -539,8 +539,8 @@ func getDrives(carId int, from, to time.Time) ([]Drive, error) {
         drives.start_date,
         drives.end_date,
         drives.duration_min,
-        COALESCE(start_geofence.name, CONCAT_WS(', ', COALESCE(start_address.name, nullif(CONCAT_WS(' ', start_address.road, start_address.house_number), '')), start_address.city)) AS start_address,
-        COALESCE(end_geofence.name, CONCAT_WS(', ', COALESCE(end_address.name, nullif(CONCAT_WS(' ', end_address.road, end_address.house_number), '')), end_address.city)) AS end_address,
+        COALESCE(start_geofence.name, CONCAT_WS(', ', COALESCE(COALESCE(start_address.name, ''), nullif(CONCAT_WS(' ', start_address.road, start_address.house_number), '')), start_address.city)) AS start_address,
+        COALESCE(end_geofence.name, CONCAT_WS(', ', COALESCE(COALESCE(end_address.name, ''), nullif(CONCAT_WS(' ', end_address.road, end_address.house_number), '')), end_address.city)) AS end_address,
         drives.distance
         FROM drives
         LEFT JOIN addresses start_address ON start_address_id = start_address.id
@@ -620,9 +620,22 @@ func getGroupedDrivesById(id string) (GroupedDrives, error) {
 	var gd GroupedDrives
 
 	row := db().QueryRow(statement)
-	err := row.Scan(&gd.Id, &gd.CarId, &gd.DriveIds, &gd.StartDate, &gd.EndDate, &gd.StartAddress, &gd.EndAddress, &gd.Distance, &gd.Duration, &gd.Classification, &gd.Comment, &gd.StartOdometer, &gd.EndOdometer)
+	var startAddress, endAddress sql.NullString
+	err := row.Scan(&gd.Id, &gd.CarId, &gd.DriveIds, &gd.StartDate, &gd.EndDate, &startAddress, &endAddress, &gd.Distance, &gd.Duration, &gd.Classification, &gd.Comment, &gd.StartOdometer, &gd.EndOdometer)
 	if err != nil {
 		return gd, err
+	}
+
+	if startAddress.Valid {
+		gd.StartAddress = startAddress.String
+	} else {
+		gd.StartAddress = ""
+	}
+
+	if endAddress.Valid {
+		gd.EndAddress = endAddress.String
+	} else {
+		gd.EndAddress = ""
 	}
 
 	gd.ClassificationClass = "unknown"
@@ -667,10 +680,23 @@ func getGroupedDrives(carId int, from, to time.Time) (map[time.Time][]GroupedDri
 
 	for rows.Next() {
 		var gd GroupedDrives
+		var startAddress, endAddress sql.NullString
 
-		err := rows.Scan(&gd.Id, &gd.CarId, &gd.DriveIds, &gd.StartDate, &gd.EndDate, &gd.StartAddress, &gd.EndAddress, &gd.Distance, &gd.Duration, &gd.Classification, &gd.Comment, &gd.StartOdometer, &gd.EndOdometer)
+		err := rows.Scan(&gd.Id, &gd.CarId, &gd.DriveIds, &gd.StartDate, &gd.EndDate, &startAddress, &endAddress, &gd.Distance, &gd.Duration, &gd.Classification, &gd.Comment, &gd.StartOdometer, &gd.EndOdometer)
 		if err != nil {
 			return nil, err
+		}
+
+		if startAddress.Valid {
+			gd.StartAddress = startAddress.String
+		} else {
+			gd.StartAddress = ""
+		}
+
+		if endAddress.Valid {
+			gd.EndAddress = endAddress.String
+		} else {
+			gd.EndAddress = ""
 		}
 
 		gd.ClassificationClass = "unknown"
@@ -726,8 +752,8 @@ func getDriveById(driveId string) (Drive, string, error) {
         drives.start_date,
         drives.end_date,
         drives.duration_min,
-        COALESCE(start_geofence.name, CONCAT_WS(', ', COALESCE(start_address.name, nullif(CONCAT_WS(' ', start_address.road, start_address.house_number), '')), start_address.city)) AS start_address,
-        COALESCE(end_geofence.name, CONCAT_WS(', ', COALESCE(end_address.name, nullif(CONCAT_WS(' ', end_address.road, end_address.house_number), '')), end_address.city)) AS end_address,
+        COALESCE(start_geofence.name, CONCAT_WS(', ', COALESCE(COALESCE(start_address.name, ''), nullif(CONCAT_WS(' ', start_address.road, start_address.house_number), '')), start_address.city)) AS start_address,
+        COALESCE(end_geofence.name, CONCAT_WS(', ', COALESCE(COALESCE(end_address.name, ''), nullif(CONCAT_WS(' ', end_address.road, end_address.house_number), '')), end_address.city)) AS end_address,
         drives.distance
         FROM drives
         LEFT JOIN addresses start_address ON start_address_id = start_address.id

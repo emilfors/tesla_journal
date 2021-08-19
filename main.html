@@ -132,6 +132,7 @@
                                     {{if ne $gid $currentGroupId}}
                                     {{$currentGroupId = .GroupIdInt}}
                                     {{$gd := $d.GetGroupedDrives $currentGroupId}}
+                                    {{if ne $gd nil}}
                                     <tr>
                                         <td align=left valign=center width=25>
                                             <input type="checkbox" class="drivecb groupedcb" name="groupeddrive" value="{{$currentGroupId}}"/>
@@ -186,6 +187,7 @@
                                             &nbsp;
                                         </td>
                                     </tr>
+                                    {{end}}
                                     {{end}}
                                     {{end}}
                                     {{if eq .GroupIdInt -1}}
